@@ -1,5 +1,24 @@
 # XIGUA handoff — 2026-10-21
 
+## Актуальное состояние: первая настоящая iOS загружена на пробу
+
+- Root iOS 20H392, 12 GiB записан в linux и полностью проверен readback SHA-256:
+  diagnostics/ios-root-install-2/verified.json. SHA-256
+  7ed76a14da8d9bf21ceb2d3f62c2524492e0ec30a3405128ca0c7879322fd7df.
+- Новый kernel 1d5c416 / CI 39646487365 SUCCESS исправляет memdev >4 GiB.
+  QEMU подтвердил HFS+ mount, Apple launchd и exec SpringBoard; GUI не доказан.
+- out/efi-ios-ram-2/esp.img установлен в ESP через recovery BusyBox dd;
+  полный SHA-256 проверен: diagnostics/ios-esp-install-1.log.
+  Оригинальный ESP сейчас НЕ установлен. Резервная копия сохранена.
+- Телефон перезагружен из recovery в fastboot и временно загружен
+  Mu-xigua-0.img. Fastboot Sending/Booting OKAY: diagnostics/ios-boot-1.txt.
+  Это первая аппаратная попытка с настоящим root iOS. Ждём экран пользователя:
+  root copy progress / XNU / launchd / GUI / error. Никаких подтверждений GUI пока.
+- Не перезагружать телефон и не восстанавливать ESP, пока пользователь сообщает
+  наблюдения. Boot_a/boot_b не прошивались. Автозагрузка из boot ещё не сделана.
+- Исходники предыдущего исправления: 12e0ac2. После успешного аппаратного GUI
+  вернуться к цели автозагрузки из boot. Touch/USB/UFS SM8550 ещё не реализованы.
+
 ## Цель и ограничения
 
 Автозагрузка iOS на Ace 2 Pro из boot; dual boot позже. Пользователь разрешил
@@ -127,3 +146,17 @@ recovery; монтировать разделы через BusyBox. Не про�
   Проверено на телефоне: бинарная копия ровно 1048576 байт. 22 tests OK.
 - Повторный installer: diagnostics/ios-root-install-2.log и каталог -2.
   Пока считает root SHA; ESP/boot всё ещё не менялись.
+
+## Root записан и проверен на телефоне
+
+- diagnostics/ios-root-install-2/verified.json: 12884901888 bytes записаны только
+  в /dev/block/by-name/linux; полный readback SHA-256 совпал:
+  7ed76a14da8d9bf21ceb2d3f62c2524492e0ec30a3405128ca0c7879322fd7df.
+- ESP out/efi-ios-ram-2/esp.img готов (96 MiB), SHA-256
+  6c61b1eee1237d85b65f0f80b78bee5c7433bb2fa2c6ab9760cf8ee6d899e603.
+  Install запущен: diagnostics/ios-esp-install-1.log. После его проверки
+  временно fastboot boot Mu-xigua-0.img, никакой прошивки boot.
+- QEMU закончил snapshot по таймеру, пока был приостановлен для передачи root.
+  result.json: no_panic_observed; это НЕ доказательство GUI. Полный console
+  build/qemu-ios-live-7: Apple launchd, exec SpringBoard; GUI не подтверждён.
+- Остаточные APFS FUSE mounts /tmp/tmp.qdasOfBpop/* размонтированы.

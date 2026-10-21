@@ -1,3 +1,17 @@
+## XIGUA first real iOS hardware attempt — 2026-10-21
+
+12 GiB iOS 20H392 HFS+ root WRITTEN to user-allocated linux, full readback
+SHA-256 verified (diagnostics/ios-root-install-2/verified.json). New kernel
+CI 39646487365 (1d5c416) fixes memdev >4 GiB. QEMU confirms HFS mount,
+Apple launchd, Early boot complete, exec SpringBoard; no GUI proven.
+New ESP out/efi-ios-ram-2/esp.img installed via recovery BusyBox dd, full SHA
+verified. Original ESP is NOT currently installed; backup preserved.
+Temporary Mu-xigua-0.img boot SENT successfully from fastboot (Sending/Booting
+OKAY), diagnostics/ios-boot-1.txt. Awaiting user's actual screen observation.
+Do not reboot or restore ESP while user is observing this attempt. No boot
+partition writes. Goal remains automatic iOS boot from boot, dual boot later.
+Full current handoff: ports/xigua/STATUS.md, including exact image/log paths.
+
 ## XIGUA Apple launchd milestone — 2026-10-21
 
 Kernel CI 39646487365 SUCCESS (1d5c416), artifact CRC/SHA verified. Real 12 GiB
