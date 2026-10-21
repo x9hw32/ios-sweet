@@ -1,5 +1,18 @@
 ## XIGUA fork handoff — 2026-10-21
 
+CI 39631591118 succeeded (7c704f2). SHA-256 verified kernel.development.xigua.
+Native embedded-payload shim + that kernel booted test PID 1 from RAM-root in
+QEMU; heartbeat observed, no_panic_observed, unknown_glyphs=0. 14 host checks pass.
+Source/tools are under ports/xigua with a separate Linux host-check workflow.
+
+Hardware: temporary Mu-xigua-0.img ran our EFI probe, saved a report and reset.
+EL1, TGran16=1, CNTFRQ=19.2MHz, GOP b8000000 1240x2772 stride4960. Original ESP
+restored bytewise via BusyBox dd in recovery and hash verified. Fastboot unlocked=yes.
+Native diagnostic v4 image sent via fastboot boot; automatic return to Android
+observed, screen result pending user. No hardware XNU boot or iOS root yet.
+Port-specific handoff: ports/xigua/STATUS.md. No device data/Apple firmware in git.
+
+
 CI 39629480987 reached compilation but failed in HFS/BearSSL: donor per-file
 include/compat flags in bsd/libkern Makefile.template were SWEET-only. Extend both
 Makefile guards to XIGUA. Other XIGUA source objects compiled in that run.

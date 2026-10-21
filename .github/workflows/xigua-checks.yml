@@ -1,0 +1,17 @@
+name: xigua-checks
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, xigua-bringup]
+    paths:
+      - 'ports/xigua/**'
+      - '.github/workflows/xigua-checks.yml'
+
+jobs:
+  host-checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Payload bounds, hardware profile and recovery-only ESP guards
+        run: python3 -m unittest discover -s ports/xigua/tests -v

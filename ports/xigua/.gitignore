@@ -1,0 +1,10 @@
+diagnostics/
+backup/
+artifacts/
+__pycache__/
+*.pyc
+upstream/
+.cache/
+build/
+out/
+*.ipsw

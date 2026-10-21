@@ -1,0 +1,171 @@
+{
+  "model": "PJA110",
+  "codename": "xigua",
+  "soc": "SM8550",
+  "ram_gib": 16,
+  "boot_header_version": 4,
+  "boot_partition_bytes": 201326592,
+  "allocated_partitions": {
+    "esp": 100663296,
+    "installer": 6899630080,
+    "linux": 77137424384
+  },
+  "devices": {
+    "gic": {
+      "path": "/soc/interrupt-controller@17100000",
+      "compatible": [
+        "arm,gic-v3"
+      ],
+      "status": [
+        "okay"
+      ],
+      "reg": [
+        {
+          "base": "0x17100000",
+          "size": "0x10000",
+          "end": "0x17110000"
+        },
+        {
+          "base": "0x17180000",
+          "size": "0x200000",
+          "end": "0x17380000"
+        }
+      ],
+      "interrupt_cells": [
+        1,
+        9,
+        4
+      ]
+    },
+    "timer": {
+      "path": "/soc/timer",
+      "compatible": [
+        "arm,armv8-timer"
+      ],
+      "status": [
+        "okay"
+      ],
+      "interrupt_cells": [
+        1,
+        13,
+        65288,
+        1,
+        14,
+        65288,
+        1,
+        11,
+        65288,
+        1,
+        12,
+        65288
+      ],
+      "virtual_timer_intid": 27
+    },
+    "ufs": {
+      "path": "/soc/ufshc@1d84000",
+      "compatible": [
+        "qcom,ufshc"
+      ],
+      "status": [
+        "ok"
+      ],
+      "reg": [
+        {
+          "base": "0x1d84000",
+          "size": "0x3000",
+          "end": "0x1d87000"
+        },
+        {
+          "base": "0x1d88000",
+          "size": "0x8000",
+          "end": "0x1d90000"
+        },
+        {
+          "base": "0x1d90000",
+          "size": "0x9000",
+          "end": "0x1d99000"
+        }
+      ],
+      "interrupt_cells": [
+        0,
+        265,
+        4
+      ]
+    },
+    "touch": {
+      "path": "/soc/qcom,qupv3_1_geni_se@ac0000/spi@a90000/synaptics_tcm_hbp@0",
+      "compatible": [
+        "synaptics,tcm-spi-hbp"
+      ],
+      "status": [
+        "okay"
+      ],
+      "reg": [
+        {
+          "base": "0x0",
+          "size": "0x0",
+          "end": "0x0"
+        }
+      ],
+      "interrupt_cells": [
+        25,
+        8200
+      ]
+    }
+  },
+  "memory": [
+    {
+      "base": "0x80000000",
+      "size": "0xe00000",
+      "end": "0x80e00000"
+    },
+    {
+      "base": "0x811d0000",
+      "size": "0x56e30000",
+      "end": "0xd8000000"
+    },
+    {
+      "base": "0xd8140000",
+      "size": "0x20000",
+      "end": "0xd8160000"
+    },
+    {
+      "base": "0xd8800000",
+      "size": "0x0",
+      "end": "0xd8800000"
+    },
+    {
+      "base": "0xe1bb0000",
+      "size": "0x1e450000",
+      "end": "0x100000000"
+    },
+    {
+      "base": "0x880000000",
+      "size": "0x35700000",
+      "end": "0x8b5700000"
+    },
+    {
+      "base": "0x8c0000000",
+      "size": "0x140000000",
+      "end": "0xa00000000"
+    },
+    {
+      "base": "0xa00000000",
+      "size": "0x200000000",
+      "end": "0xc00000000"
+    }
+  ],
+  "splash_reserved_region": {
+    "path": "/reserved-memory/splash_region",
+    "base": "0xb8000000",
+    "size": "0x2b00000",
+    "end": "0xbab00000"
+  },
+  "kernel_ram_selected": null,
+  "abl_framebuffer_verified": false,
+  "known_working_uefi": {
+    "file": "Mu-xigua-0.img",
+    "status": "reported working by user",
+    "sha256": "193db5377413eccbd3e9359b0afe2aebdb67e8155e9eb0609e0a67c5476f73f7"
+  }
+}
