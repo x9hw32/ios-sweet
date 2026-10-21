@@ -1,3 +1,21 @@
+## MMIO-fix kernel verified; CPU6 hardware test2 — 2026-10-21
+
+CI39659598333 SUCCESS, commit51ff437321e4a0503141cbb44486c391f9689b58.
+Kernel ZIP CRC and SHA verified: 519914d9f57b0e55d7a4a27634326ed3a9ecffac9a58c70695bf62f463d8abfa.
+Final linked pe_init_fiq disassembly checked: twelve 32-bit register-only STRs,
+no pre/post-indexed base writeback. Saved build/pe-init-fiq-39659598333.asm.
+27 host checks passed; no VM run. out/phone-ios-cpu6-mmio-1 verified against
+new kernel SHA, ADT6 real MPIDRs0..500, cpus6, fb30, old geometry fitOFF.
+ESP out/efi-ios-cpu6-mmio-1/esp.img SHA
+b39dedb9e0b06aad50699e9cd876462e38051f967af46fa0ca5ecb1018e2c281.
+Phone confirmed PJA110 recovery uid0; previous ESP6 saved in
+ diagnostics/ios-before-cpu6-mmio-1/esp-after-probe.img, original restored and
+verified. New ESP install PASSED full SHA readback: diagnostics/ios-cpu6-mmio-esp-install-1.log.
+No root linux or boot partition writes. Temporary Mu fastboot boot SUCCEEDED;
+Sending/Booting OKAY, diagnostics/ios-cpu6-mmio-boot-1.txt/.json.
+Await hardware CPU6/6+SGI1 and iOS; fix is NOT yet hardware-proven. Only SMP
+current task. NO QEMU, NO10Hz; display fit/input remain deferred.
+
 ## CPU6 repeats GIC abort; MMIO instruction fix — 2026-10-21
 
 CPU6 attempt also PANICKED, same CI39654978298 PC0xfffffe0007a77c54;
