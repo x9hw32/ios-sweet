@@ -116,6 +116,16 @@ void sweet_early_disable(void) {}
 \tif (!native && fWidth <= SWEET_FB_LOGICAL_W && fHeight <= SWEET_FB_LOGICAL_H) {
 #endif''')
 
+    # memdev stores its length as a 32-bit count of 4 KiB pages. Promote before
+    # shifting: a 12 GiB root otherwise wraps to zero in strategy and ioctls.
+    memdev = 'bsd/dev/memdev.c'
+    expression = 'mdev[devid].mdSize << 12'
+    replace(memdev, expression, '(uint64_t)mdev[devid].mdSize << 12',
+            count=read(memdev).count(expression))
+    replace(memdev,
+            'count = imin(uio_resid(uio), ((uint64_t)mdev[devid].mdSize << 12) - uio->uio_offset);',
+            'count = (int)MIN((uint64_t)INT_MAX, MIN((uint64_t)uio_resid(uio), ((uint64_t)mdev[devid].mdSize << 12) - uio->uio_offset));')
+
     # Change printed prefixes only. Driver symbols, boot arguments, protocol
     # names and stored log formats retain their existing interfaces.
     prefix = re.compile(r'"SWEET(?=[ :])')

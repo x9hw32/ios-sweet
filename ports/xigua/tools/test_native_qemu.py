@@ -46,6 +46,8 @@ def main():
     p.add_argument('--efi-esp', type=Path, help='Boot this FAT image through EDK2 instead of -kernel')
     p.add_argument('--root-disk', type=Path, help='Additional GPT disk with 4 KiB logical sectors')
     p.add_argument('--memory', default='4G', help='QEMU guest RAM (default 4G)')
+    p.add_argument('--memory-file', type=Path, help='Existing file backing guest RAM, with external root preloaded')
+    p.add_argument('--ios-userland', action='store_true', help='Capture real iOS boot for manual inspection; do not require the static-init marker')
     a = p.parse_args()
     if a.kernel and not a.payload:
         p.error('--kernel requires --payload for font lookup')
@@ -66,6 +68,9 @@ def main():
     if a.root_disk:
         cmd += ['-drive', f'if=none,id=root,format=raw,file={a.root_disk.resolve()},snapshot=on',
                 '-device', 'virtio-blk-pci,drive=root,logical_block_size=4096,physical_block_size=4096']
+    if a.memory_file:
+        cmd[2] += ',memory-backend=guestmem'
+        cmd += ['-object', f'memory-backend-file,id=guestmem,size={a.memory},mem-path={a.memory_file.resolve()},share=on,prealloc=off']
     with (out / 'stderr.txt').open('wb') as error:
         process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=error)
         try:
@@ -92,6 +97,9 @@ def main():
         text, unknown = qemu.decode_screen(raw, font)
         result = qemu.screen_result(text, unknown)
         result['pid1_observed'] = 'init running as PID 1' in text
+        if a.ios_userland:
+            result['expected_userland'] = 'ios'
+            result['gui_requires_visual_inspection'] = True
     else:
         text = shim_text(raw)
         result = {'native_diagnostic_observed': 'XIGUA native shim' in text,
@@ -101,6 +109,8 @@ def main():
     print(text[:1400])
     print(json.dumps(result))
     if a.kernel:
+        if a.ios_userland:
+            return 1 if result['status'] == 'panic' else 0
         return 0 if result['pid1_observed'] and result['status'] != 'panic' else 1
     return 0 if result['native_diagnostic_observed'] and result['empty_payload_rejected'] else 1
 

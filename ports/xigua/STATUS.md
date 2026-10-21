@@ -76,7 +76,7 @@ recovery; монтировать разделы через BusyBox. Не про�
    потому что диапазон перекрывал реальные allocations самой QEMU EFI.
    Вариант 5 использует найденный по карте свободный диапазон.
    Вариант 6 проверяет чтение через DMA bounce-buffer ниже 4 GiB и CRC назначения.
-4. Скачивается Apple iPhone X 20H392 IPSW: artifacts/ios-20H392/; aria2 resume.
+4. Apple iPhone X 20H392 IPSW полностью скачан: artifacts/ios-20H392/.
    apfs-fuse собран в build/apfs-fuse; hfsprogs в .cache/hfsprogs.
 5. Создать HFS+ root iOS (цель 12 GiB), записать только в выделенный linux из recovery.
    UEFI читает его в RAM, XNU использует md0. Не включать SM7150 UFS/USB/touch.
@@ -91,3 +91,20 @@ recovery; монтировать разделы через BusyBox. Не про�
 8. Для записи root использовать tools/install_ios_root.py только в recovery:
    проверяет HFS+, хеш/размер, boot/ESP backups, mapping, mounted aliases;
    BusyBox iflag=fullblock поддерживается и проверен. Не писать до готового root.json.
+
+## Настоящий iOS root — 2026-10-21
+
+- 12 GiB HFS+ root собран из полного Apple IPSW (20H392); launchd, dyld,
+  shared cache проверены, root tweaks применены. Финальный fsck -f -n: OK.
+  Свободно 413 MiB. tools/prepare_ios_root.py ещё считает SHA-256 для root.json.
+- Реальный root запущен в file-backed QEMU: build/qemu-ios-1/.
+  build/qemu-ios-live-2/console.txt: md0 зарегистрирован с размером 12 GiB,
+  но hfs_mountfs отказал (EINVAL), поэтому launchd ещё не запущен.
+- Найдена причина: bsd/dev/memdev.c сдвигает uint32_t mdSize на 12 бит до
+  расширения; 12 GiB превращаются в ноль. Исправляется продвижением в uint64_t
+  до сдвига в strategy/ioctl/raw IO; raw IO также ограничивает count до INT_MAX.
+  Патч 0082 обновлён. Нужны CI-сборка и повторная QEMU-проверка полного root.
+- out/efi-ios-ram-1 строится со старым ядром; НЕ устанавливать его на телефон.
+  После нового ядра пересобрать native Image и ESP в новых каталогах.
+- Телефон остаётся в recovery, linux ещё не записан. Следующий аппаратный boot
+  должен использовать настоящий root, после исправления выявленной ошибки.

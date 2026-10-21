@@ -60,15 +60,23 @@ def launchd(root):
     plist = load(path)
     jobs = plist['LaunchDaemons']
     renamed = 0
+    stream_paths = 0
     for job in jobs.values():
         if '_PanicOnCrash' in job:
             job['_PanicOnCrasX'] = job.pop('_PanicOnCrash')
             renamed += 1
+        # Match the working v9+ root: let launchd supply its default streams.
+        # Explicit output paths caused posix_spawn EACCES during bring-up.
+        for key in ('StandardOutPath', 'StandardErrorPath'):
+            if key in job:
+                job[key[:-1] + 'X'] = job.pop(key)
+                stream_paths += 1
     removed = [k for k, j in jobs.items() if j.get('Label') == 'com.apple.CommCenter']
     for k in removed:
         del jobs[k]
     save(path, plist, st.st_uid, st.st_gid, st.st_mode & 0o7777)
     print(f'launchd.plist: {renamed} _PanicOnCrash renamed, {len(removed)} CommCenter jobs removed')
+    print(f'launchd.plist: {stream_paths} explicit output paths disabled')
 
 
 def containers(root):

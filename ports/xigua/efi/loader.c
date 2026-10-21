@@ -24,6 +24,14 @@ static VOID number(CONST CHAR16 *name, UINT64 n)
     for (UINTN i = 0; i < 16; i++) value[2+i] = digits[(n >> ((15-i)*4)) & 15];
     say(name); say(value); say(L"\r\n");
 }
+static VOID decimal(UINT64 n)
+{
+    CHAR16 value[24];
+    UINTN pos = 23;
+    value[pos] = 0;
+    do { value[--pos] = (CHAR16)(L'0' + n % 10); n /= 10; } while (n);
+    say(value + pos);
+}
 static VOID bytes_zero(VOID *p, UINTN n)
 {
     volatile UINT8 *b = p;
@@ -80,8 +88,10 @@ static EFI_STATUS read_root(EFI_BOOT_SERVICES *bs)
         status = bs->CalculateCrc32(destination, length, &crc);
         if (EFI_ERROR(status) || crc != root_crc[index]) { status = EFI_CRC_ERROR; break; }
         offset += length;
-        if (!(offset & ((1ULL << 30) - 1)) || offset == ROOT_BYTES)
-            number(L"Root bytes verified: ", offset);
+        if (!(offset & ((1ULL << 30) - 1)) || offset == ROOT_BYTES) {
+            say(L"iOS root loaded: "); decimal(offset / (1024 * 1024));
+            say(L" / "); decimal(ROOT_BYTES / (1024 * 1024)); say(L" MiB\r\n");
+        }
     }
     bs->FreePages(transfer, ROOT_CHUNK / 4096);
     return status;

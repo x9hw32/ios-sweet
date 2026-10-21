@@ -1,3 +1,15 @@
+## XIGUA real iOS root / large memdev fix — 2026-10-21
+
+Full Apple 20H392 IPSW downloaded; 12 GiB HFS+ root built, essential files
+checked, final fsck OK, 413 MiB free. Final receipt hashes still running.
+Real-root QEMU reached md0 but failed HFS mount (EINVAL): memdev shifts its
+uint32_t page count before widening, so 12 GiB wraps to zero. Patch 0082 now
+promotes mdSize before shifting and caps raw IO count to INT_MAX. Build and
+verify this kernel against the real root before the next hardware attempt.
+Phone remains recovery; linux not written yet. Existing efi-ios-ram-1 uses
+old kernel: DO NOT install it. Build fresh native Image/ESP after new CI.
+See ports/xigua/STATUS.md. User wants actual iOS, no further diagnostic boots.
+
 ## XIGUA UEFI RAM-root progress — 2026-10-21
 
 New kernel dded2cb built successfully in CI 39637551537; CRC/SHA verified locally.
