@@ -71,6 +71,10 @@ def overlay(source):
     # GICv4 redistributors with VLPI frames occupy 256 KiB, not 128 KiB.
     # Match each secondary by its MPIDR without probing the intervening frame.
     gic = 'pexpert/arm/pe_fiq.c'
+    replace(gic, 'static vm_offset_t gicr_size;',
+            'static vm_offset_t gicr_size;\n'
+            '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n'
+            'static uint64_t xigua_gicr_stride;\n#endif')
     replace(gic, '#include <pexpert/arm64/board_config.h>',
             '#include <pexpert/arm64/board_config.h>\n'
             '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n'
@@ -83,7 +87,7 @@ def overlay(source):
                 '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n\t' + call +
                 '\n#else\n\t' + old + '\n#endif')
     replace(gic, 'for (vm_offset_t offset = 0; offset < gicr_size; offset += GICR_PE_SIZE) {',
-            'for (vm_offset_t offset = 0; offset + GICR_TYPER + 8 <= gicr_size;) {')
+            'for (vm_offset_t offset = 0; offset <= gicr_size && gicr_size - offset >= GICR_PE_SIZE;) {')
     replace(gic, '''\t\tif (gicr_typer & GICR_TYPER_LAST) {
 \t\t\tbreak;
 \t\t}
@@ -91,11 +95,30 @@ def overlay(source):
 \t\t\tbreak;
 \t\t}
 #if defined(ARM64_BOARD_CONFIG_XIGUA)
-\t\toffset += (gicr_typer & 2ULL) ? 0x40000 : GICR_PE_SIZE;
+\t\t/* DT stride takes precedence: firmware may hide VLPIS while keeping
+\t\t * 256 KiB spacing, so the intervening 128 KiB is not another RD. */
+\t\toffset += xigua_gicr_stride ? xigua_gicr_stride :
+\t\t    ((gicr_typer & 2ULL) ? 0x40000 : GICR_PE_SIZE);
 #else
 \t\toffset += GICR_PE_SIZE;
 #endif
 ''')
+    replace(gic, '\t\tgicr_size = gicr_size_prop;', '''\t\tgicr_size = gicr_size_prop;
+#if defined(ARM64_BOARD_CONFIG_XIGUA)
+\t\tconst void *stride_prop;
+\t\tunsigned int stride_size;
+\t\tif (SecureDTGetProperty(entry, "redistributor-stride", &stride_prop, &stride_size) == kSuccess) {
+\t\t\tif (stride_size != sizeof(uint64_t)) {
+\t\t\t\tpanic("XIGUA GIC: invalid redistributor-stride size %u", stride_size);
+\t\t\t}
+\t\t\txigua_gicr_stride = *(const uint64_t *)stride_prop;
+\t\t\tif (xigua_gicr_stride < GICR_PE_SIZE || (xigua_gicr_stride & 0xffff) ||
+\t\t\t    xigua_gicr_stride > gicr_size) {
+\t\t\t\tpanic("XIGUA GIC: invalid redistributor stride 0x%llx", xigua_gicr_stride);
+\t\t\t}
+\t\t}
+\t\tkprintf("XIGUA GIC: DT redistributor stride=0x%llx\\n", xigua_gicr_stride);
+#endif''')
     replace(gic, '\t\tif (phys_id == aff_value) {\n\t\t\treturn gicr_pe_base;',
             '\t\tif (phys_id == aff_value) {\n'
             '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n'

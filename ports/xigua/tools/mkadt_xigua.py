@@ -57,6 +57,14 @@ def make(profile):
                                profile['gicd_size'], profile['gicr'] - mkadt.SOC_BASE,
                                profile['gicr_size']))
     put(gic, 'virtual-timer-intid', struct.pack('<I', profile['virtual_timer_intid']))
+    stride = profile.get('gicr_stride', 0)
+    if profile.get('kind') == 'phone' and count > 1 and not stride:
+        raise ValueError('Recreate the phone SMP profile with the live DT redistributor stride')
+    if stride:
+        if (not isinstance(stride, int) or stride < 0x20000 or stride % 0x10000 or
+                stride > profile['gicr_size'] or (count - 1) * stride + 0x20000 > profile['gicr_size']):
+            raise ValueError('GIC redistributor stride/count exceeds the verified region')
+        put(gic, 'redistributor-stride', struct.pack('<Q', stride))
     # GUI/display service is a later milestone; no UFS node or hardware driver startup.
     if not profile.get('gui'):
         io.children = [n for n in io.children if n.name != 'disp0']

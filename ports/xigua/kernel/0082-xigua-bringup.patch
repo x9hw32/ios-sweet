@@ -2229,7 +2229,14 @@
  
  
  #if HAS_GIC_V3
-@@ -29,19 +33,31 @@
+@@ -25,23 +29,38 @@
+ static vm_offset_t gicd_base;
+ static vm_offset_t gicr_base;
+ static vm_offset_t gicr_size;
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++static uint64_t xigua_gicr_stride;
++#endif
+ 
  static uint32_t
  _gic_read32(vm_offset_t addr)
  {
@@ -2261,12 +2268,12 @@
  }
  
  #define gicd_read32(offset) (_gic_read32(gicd_base + (offset)))
-@@ -56,18 +72,27 @@
+@@ -56,18 +75,30 @@
  	// We only care about aff1 and aff0
  	uint32_t phys_id = __builtin_arm_rsr64("MPIDR_EL1") & (MPIDR_AFF1_MASK | MPIDR_AFF0_MASK);
  
 -	for (vm_offset_t offset = 0; offset < gicr_size; offset += GICR_PE_SIZE) {
-+	for (vm_offset_t offset = 0; offset + GICR_TYPER + 8 <= gicr_size;) {
++	for (vm_offset_t offset = 0; offset <= gicr_size && gicr_size - offset >= GICR_PE_SIZE;) {
  		vm_offset_t gicr_pe_base = gicr_base + offset;
  		uint64_t gicr_typer = gicr_read64(GICR_TYPER);
  		uint32_t aff_value = (uint32_t) (gicr_typer >> GICR_TYPER_AFFINITY_VALUE_SHIFT) & (MPIDR_AFF1_MASK | MPIDR_AFF0_MASK);
@@ -2283,14 +2290,17 @@
  			break;
  		}
 +#if defined(ARM64_BOARD_CONFIG_XIGUA)
-+		offset += (gicr_typer & 2ULL) ? 0x40000 : GICR_PE_SIZE;
++		/* DT stride takes precedence: firmware may hide VLPIS while keeping
++		 * 256 KiB spacing, so the intervening 128 KiB is not another RD. */
++		offset += xigua_gicr_stride ? xigua_gicr_stride :
++		    ((gicr_typer & 2ULL) ? 0x40000 : GICR_PE_SIZE);
 +#else
 +		offset += GICR_PE_SIZE;
 +#endif
  	}
  
  	panic("%s: cannot find GICR base for core %u", __func__, ml_get_cpu_number(phys_id));
-@@ -116,7 +141,7 @@
+@@ -116,7 +147,7 @@
  			}
  			sweet_vtimer_intid = intid;
  		}
@@ -2299,6 +2309,28 @@
  #endif
  
  		vm_offset_t soc_base_phys = pe_arm_get_soc_base_phys();
+@@ -141,6 +172,21 @@
+ 		}
+ 
+ 		gicr_size = gicr_size_prop;
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++		const void *stride_prop;
++		unsigned int stride_size;
++		if (SecureDTGetProperty(entry, "redistributor-stride", &stride_prop, &stride_size) == kSuccess) {
++			if (stride_size != sizeof(uint64_t)) {
++				panic("XIGUA GIC: invalid redistributor-stride size %u", stride_size);
++			}
++			xigua_gicr_stride = *(const uint64_t *)stride_prop;
++			if (xigua_gicr_stride < GICR_PE_SIZE || (xigua_gicr_stride & 0xffff) ||
++			    xigua_gicr_stride > gicr_size) {
++				panic("XIGUA GIC: invalid redistributor stride 0x%llx", xigua_gicr_stride);
++			}
++		}
++		kprintf("XIGUA GIC: DT redistributor stride=0x%llx\n", xigua_gicr_stride);
++#endif
+ 	}
+ 
+ 	// Find the redistributor for this processor
 --- a/pexpert/pexpert/arm64/Makefile
 +++ b/pexpert/pexpert/arm64/Makefile
 @@ -18,7 +18,10 @@

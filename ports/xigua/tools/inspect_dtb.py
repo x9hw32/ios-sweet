@@ -44,6 +44,15 @@ def summarize(data):
                      'status': node.strings('status') if 'status' in node.props else ['okay']}
             if 'reg' in node.props:
                 value['reg'] = [region(*r) for r in node.ranges()]
+            if kind == 'gic' and 'redistributor-stride' in node.props:
+                raw = node.props['redistributor-stride']
+                if len(raw) != 8:
+                    raise ValueError('GIC redistributor-stride must be a 64-bit DT value')
+                stride = int.from_bytes(raw, 'big')
+                if (stride < 0x20000 or stride % 0x10000 or
+                        len(value['reg']) < 2 or stride > int(value['reg'][1]['size'], 16)):
+                    raise ValueError('Invalid GIC redistributor-stride')
+                value['redistributor_stride'] = hex(stride)
             if 'interrupts' in node.props:
                 raw = node.props['interrupts']
                 value['interrupt_cells'] = list(struct.unpack('>%dI' % (len(raw) // 4), raw))

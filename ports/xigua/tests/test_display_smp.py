@@ -41,6 +41,18 @@ class DisplaySMPTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.tree(p)
 
+    def test_gic_stride_rejects_partial_or_out_of_range_redistributors(self):
+        for stride in [1, 0x10000, 0x21000, 0x100000000]:
+            p = self.profile(); p['gicr_stride'] = stride
+            with self.assertRaises(ValueError):
+                self.tree(p)
+        p = self.profile(); p.update(gicr_stride=0x40000, gicr_size=0x1d0000)
+        with self.assertRaises(ValueError):
+            self.tree(p)
+        p = self.profile(); p['kind'] = 'phone'
+        with self.assertRaises(ValueError):
+            self.tree(p)
+
     def test_fit_retains_known_canvas_native_updates_both_dimensions(self):
         for mode, expected in [('fit', (1125, 2436)), ('native', (1080, 2400))]:
             p = self.profile(); p['display_mode'] = mode

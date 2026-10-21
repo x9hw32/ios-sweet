@@ -1,3 +1,33 @@
+## CPU1 undefined LDR; missing live-DT redistributor stride fixed — 2026-10-21
+
+MMIO-fix CI39659598333 hardware reaches CPU1, then panic Undefined kernel
+instruction instr=f940016b, caller0xfffffe0007ad5170, sleh.c951. User PC
+0xfffffe0007a77bf44 has extra digit; matching exact instruction in binary
+at0xfffffe0007a77bf4 = pe_init_fiq+0x154, ldr x11,[x11], reading GICR_TYPER
+in RD search. CPU0's previous writeback STR fault passed. No ESR/X11 visible
+on this panic screen; don't ask user to transcribe entire backtrace.
+
+FOUND omitted hardware fact: actual live.dtb GIC has redistributor-stride
+64-bit BE <0 0x40000>, verified fdtget and Python parser. Our summarizer/profile/
+ADT dropped this property. Prior scanner used VLPIS bit only, potentially
+stepping0x20000 into unimplemented hole when firmware masks VLPIS. This
+explains CPU1 failure, but full fix needs phone verification.
+
+Now preserve stride through inspect_dtb -> make_profile -> little-endian ADT
+property redistributor-stride -> XNU boot CPU parses/validates global stride,
+scanner prioritizes it over VLPIS. No register-width/security bypasses.
+Keep explicit no-writeback MMIO helpers. Bound whole RD+SGI frame in region.
+Phone SMP profiles without stride are rejected to prevent reuse of old profile.
+29 host checks pass, including FDT-node/profile/ADT stride propagation and
+invalid/missing/out-of-range stride guards. No QEMU. Full0082 apply-check OK.
+
+Fresh build/phone-ios-smp-stride-profile.json (also updated phone-ios-smp-profile)
+regenerated from real live DT + verified UEFI report2; stride0x40000,8frames in
+0x200000, fb verified flag retained. Next: remote kernel CI, CPU6/fb30/old
+geometry fitOFF, completeESP via BusyBox dd in recovery, temporaryfastbootMu.
+Root linux unchanged12GiB; boot partitions untouched. ONLY SMP task current.
+Phone last on panic screen, no ADB/fastboot; manual recovery needed for newtest.
+
 ## MMIO-fix kernel verified; CPU6 hardware test2 — 2026-10-21
 
 CI39659598333 SUCCESS, commit51ff437321e4a0503141cbb44486c391f9689b58.

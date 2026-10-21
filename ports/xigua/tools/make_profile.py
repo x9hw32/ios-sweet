@@ -92,6 +92,7 @@ def make_profile(dtb, report, large_ram=False):
             'virtual_timer_intid': board['devices']['timer']['virtual_timer_intid'],
             'gicd': int(gic[0]['base'], 16), 'gicd_size': int(gic[0]['size'], 16),
             'gicr': int(gic[1]['base'], 16), 'gicr_size': int(gic[1]['size'], 16),
+            'gicr_stride': int(board['devices']['gic'].get('redistributor_stride', '0'), 16),
             'ram_base': ram, 'ram_size': length,
             'ram_status': ('UEFI reserved range; three pages sampled; large XNU mapping unverified'
                            if large_ram else 'candidate: live DT intersected with UEFI conventional memory'),
