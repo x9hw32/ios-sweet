@@ -1,3 +1,22 @@
+## Stride-fix kernel ready; CPU6 hardware test3 — 2026-10-21
+
+CI39662845808 SUCCESS, commit5f0e41364d83ca34820e78f74f4701c5cd151e00.
+Kernel artifact CRC/SHA verified, SHA
+177b33ca0c9bba1f626f1a196b9d56cf5db41bd39afb47aa76f184dfdb23c776.
+Final linked pe_init_fiq verified: loads xigua_gicr_stride and uses it before
+VLPIS fallback; no base-writeback MMIO. Disassembly saved under build/.
+out/phone-ios-cpu6-stride-1 embedded payload (not only loose ADT) checked:
+CPU6 realMPIDRs0..500, redistributor-stride uint64LE0x40000, fb30, fitOFF.
+ESP out/efi-ios-cpu6-stride-1/esp.img SHA
+3f8047535be6fc7133a697a990d337417c42d12b9892e87a6e064d27b3e7ff62.
+Recovery PJA110 root confirmed, previous ESP saved diagnostics/
+ios-before-cpu6-stride-1/esp-after-probe.img; original restored/fullSHAverified.
+New ESP install PASSED full SHA readback, ios-cpu6-stride-esp-install-1.log.
+TemporaryMu fastbootboot SUCCEEDED (Sending/Booting OKAY), logs
+ios-cpu6-stride-boot-1.txt/.json. Await user CPU6/6+SGI1 or panic. No reboot after user observation until needed.
+Root linux12GiB unchanged, boot partitions untouched. ONLY SMP task; NO QEMU,
+NO10Hz; display fit/input deferred. Six working CPUs still NOT proven.
+
 ## CPU1 undefined LDR; missing live-DT redistributor stride fixed — 2026-10-21
 
 MMIO-fix CI39659598333 hardware reaches CPU1, then panic Undefined kernel
@@ -23,7 +42,8 @@ invalid/missing/out-of-range stride guards. No QEMU. Full0082 apply-check OK.
 
 Fresh build/phone-ios-smp-stride-profile.json (also updated phone-ios-smp-profile)
 regenerated from real live DT + verified UEFI report2; stride0x40000,8frames in
-0x200000, fb verified flag retained. Next: remote kernel CI, CPU6/fb30/old
+0x200000, fb verified flag retained. Kernel CI39662845808 running, commit5f0e413; remote host checks39662845912/39662845809 SUCCESS.
+Next: CPU6/fb30/old
 geometry fitOFF, completeESP via BusyBox dd in recovery, temporaryfastbootMu.
 Root linux unchanged12GiB; boot partitions untouched. ONLY SMP task current.
 Phone last on panic screen, no ADB/fastboot; manual recovery needed for newtest.
