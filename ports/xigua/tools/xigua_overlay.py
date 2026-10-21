@@ -38,7 +38,7 @@ def overlay(source):
         replace(template, 'ifeq ($(CURRENT_MACHINE_CONFIG),SWEET)',
                 'ifneq ($(filter SWEET XIGUA,$(CURRENT_MACHINE_CONFIG)),)')
     create('config/MASTER.arm64.xigua',
-           '# XIGUA: SM8550 single-CPU RAM-root bring-up. Reuses donor generic ARM support.\n' +
+           '# XIGUA: SM8550 PSCI SMP RAM-root. Reuses donor generic ARM support.\n' +
            (source / 'config/MASTER.arm64.sweet').read_text())
     create('pexpert/pexpert/arm64/XIGUA.h', '''/* XIGUA (OnePlus Ace 2 Pro / SM8550): generic ARM support, no Apple SoC registers. */
 #ifndef _PEXPERT_ARM64_XIGUA_H
@@ -48,7 +48,7 @@ def overlay(source):
 #undef SWEET_VTIMER_INTID
 #define SWEET_VTIMER_INTID 27
 #undef SWEET_SMP_MAX_CPUS
-#define SWEET_SMP_MAX_CPUS 1
+#define SWEET_SMP_MAX_CPUS 8
 #endif
 ''')
     replace('pexpert/pexpert/arm64/Makefile', '\tSWEET.h\n',
@@ -65,6 +65,31 @@ def overlay(source):
 ''')
     replace('pexpert/pexpert/arm64/board_config.h', '#include <pexpert/arm64/SWEET.h>',
             '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n#include <pexpert/arm64/XIGUA.h>\n#else\n#include <pexpert/arm64/SWEET.h>\n#endif')
+
+    # GICv4 redistributors with VLPI frames occupy 256 KiB, not 128 KiB.
+    # Match each secondary by its MPIDR without probing the intervening frame.
+    gic = 'pexpert/arm/pe_fiq.c'
+    replace(gic, 'for (vm_offset_t offset = 0; offset < gicr_size; offset += GICR_PE_SIZE) {',
+            'for (vm_offset_t offset = 0; offset + GICR_TYPER + 8 <= gicr_size;) {')
+    replace(gic, '''\t\tif (gicr_typer & GICR_TYPER_LAST) {
+\t\t\tbreak;
+\t\t}
+''', '''\t\tif (gicr_typer & GICR_TYPER_LAST) {
+\t\t\tbreak;
+\t\t}
+#if defined(ARM64_BOARD_CONFIG_XIGUA)
+\t\toffset += (gicr_typer & 2ULL) ? 0x40000 : GICR_PE_SIZE;
+#else
+\t\toffset += GICR_PE_SIZE;
+#endif
+''')
+    replace('iokit/Kernel/arm/SweetCPU.cpp',
+            '\tcpuName = OSSymbol::withCStringNoCopy("Kryo 470");',
+            '''#if defined(ARM64_BOARD_CONFIG_XIGUA)
+\tcpuName = OSSymbol::withCStringNoCopy("Snapdragon 8 Gen 2");
+#else
+\tcpuName = OSSymbol::withCStringNoCopy("Kryo 470");
+#endif''')
 
     # The donor's two pre-ADT drawing blocks must never access its framebuffer.
     for comment in ['\t/* Stage 0: white 64x32 band, no stack or page tables needed. */',
@@ -114,6 +139,90 @@ void sweet_early_disable(void) {}
 \tif (!native) {
 #else
 \tif (!native && fWidth <= SWEET_FB_LOGICAL_W && fHeight <= SWEET_FB_LOGICAL_H) {
+#endif''')
+
+    # Keep UIKit's known iPhone screen class, compose into cacheable RAM and
+    # scale to the complete panel. Only changed 64-pixel tiles reach scanout.
+    fb = 'iokit/Kernel/arm/SweetFramebuffer.cpp'
+    create('iokit/Kernel/arm/XiguaBlit.h',
+           (Path(__file__).resolve().parent.parent / 'kernel/xigua_blit.h').read_text())
+    replace(fb, '#include <sys/proc.h>\n', '''#include <sys/proc.h>
+#if defined(ARM64_BOARD_CONFIG_XIGUA)
+#include "XiguaBlit.h"
+#endif
+''')
+    replace(fb, '\tbool          fPowerOff;', '''#if defined(ARM64_BOARD_CONFIG_XIGUA)
+\tuint32_t *fCanvas, *fPrevious, *fXMap, *fYMap;
+\tbool fFit, fForce;
+#endif
+\tbool          fPowerOff;''')
+    replace(fb, '\tuint32_t hz = 10;', '''#if defined(ARM64_BOARD_CONFIG_XIGUA)
+\tuint32_t hz = 30;
+#else
+\tuint32_t hz = 10;
+#endif''')
+    replace(fb, '\tregisterService();\n', '''#if defined(ARM64_BOARD_CONFIG_XIGUA)
+\tfFit = false;
+\tfForce = true;
+\tint fit = 0;
+\tPE_parse_boot_argn("sweetfb_fit", &fit, sizeof(fit));
+\tif (fit && fLogicalW && fLogicalH && fWidth <= 8192 && fHeight <= 8192) {
+\t\tsize_t canvasBytes = (size_t)fLogicalW * fLogicalH * 4;
+\t\tsize_t previousBytes = (size_t)fWidth * fHeight * 4;
+\t\tfCanvas = (uint32_t *)IOMallocZeroData(canvasBytes);
+\t\tfPrevious = (uint32_t *)IOMallocZeroData(previousBytes);
+\t\tfXMap = (uint32_t *)IOMallocData(fWidth * 4);
+\t\tfYMap = (uint32_t *)IOMallocData(fHeight * 4);
+\t\tif (fCanvas && fPrevious && fXMap && fYMap) {
+\t\t\tfor (uint32_t x = 0; x < fWidth; x++)
+\t\t\t\tfXMap[x] = (uint64_t)x * fLogicalW / fWidth;
+\t\t\tfor (uint32_t y = 0; y < fHeight; y++)
+\t\t\t\tfYMap[y] = (uint64_t)y * fLogicalH / fHeight;
+\t\t\tfFit = true;
+\t\t\tfOffX = fOffY = 0;
+\t\t\tIOLog("XIGUA FB: full-panel fit enabled, cached composition and changed tiles\\n");
+\t\t} else {
+\t\t\tif (fCanvas) IOFreeData(fCanvas, canvasBytes);
+\t\t\tif (fPrevious) IOFreeData(fPrevious, previousBytes);
+\t\t\tif (fXMap) IOFreeData(fXMap, fWidth * 4);
+\t\t\tif (fYMap) IOFreeData(fYMap, fHeight * 4);
+\t\t\tfCanvas = fPrevious = fXMap = fYMap = NULL;
+\t\t\tIOLog("XIGUA FB: fit allocation failed; centered display fallback\\n");
+\t\t}
+\t}
+#endif
+\tregisterService();
+''')
+    replace(fb, '\tuint32_t mask = get32(rec, 0x104);', '''\tuint32_t mask = get32(rec, 0x104);
+\tuintptr_t target = fPixels;
+\tuint32_t targetWidth = fWidth, targetHeight = fHeight, targetStride = fRowBytes;
+#if defined(ARM64_BOARD_CONFIG_XIGUA)
+\tif (fFit) {
+\t\ttarget = (uintptr_t)fCanvas;
+\t\ttargetWidth = fLogicalW;
+\t\ttargetHeight = fLogicalH;
+\t\ttargetStride = fLogicalW * 4;
+\t}
+#endif''')
+    replace(fb, 'w > (int32_t)fWidth - dx', 'w > (int32_t)targetWidth - dx')
+    replace(fb, 'w = (int32_t)fWidth - dx', 'w = (int32_t)targetWidth - dx')
+    replace(fb, 'h > (int32_t)fHeight - dy', 'h > (int32_t)targetHeight - dy')
+    replace(fb, 'h = (int32_t)fHeight - dy', 'h = (int32_t)targetHeight - dy')
+    replace(fb, 'fPixels + (uint64_t)(dy + y) * fRowBytes + (uint64_t)dx * 4',
+            'target + (uint64_t)(dy + y) * targetStride + (uint64_t)dx * 4')
+    replace(fb, '\t\ts->release();\n\t}\n}', '''\t\ts->release();
+\t}
+#if defined(ARM64_BOARD_CONFIG_XIGUA)
+\tif (fFit) {
+\t\tbool force = __atomic_exchange_n(&fForce, false, __ATOMIC_ACQ_REL);
+\t\t(void)xigua_blit_flush(fCanvas, fLogicalW, fXMap, fYMap, fPrevious,
+\t\t    (uint8_t *)fPixels, fWidth, fHeight, fRowBytes, force, memcpy);
+\t}
+#endif
+}''')
+    replace(fb, '\t\t\t\tfFB->fFadeStep = 0;', '''\t\t\t\tfFB->fFadeStep = 0;
+#if defined(ARM64_BOARD_CONFIG_XIGUA)
+\t\t\t\tif (!off) __atomic_store_n(&fFB->fForce, true, __ATOMIC_RELEASE);
 #endif''')
 
     # memdev stores its length as a 32-bit count of 4 KiB pages. Promote before

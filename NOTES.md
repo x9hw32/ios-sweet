@@ -1,3 +1,37 @@
+## XIGUA SMP / full-panel rendering changes ready for CI — 2026-10-21
+
+Lock screen confirmed by user. CPU1, bordered centered iPhone X image with
+console leftovers, very slow visible repaint. Touch/buttons inactive.
+USER FORBIDS LOCAL QEMU: all stopped, backing files deleted. Do not restart.
+Patch0082 now permits8 CPUs, respects GICR VLPIS stride, keeps all MMIO
+hardware disables. Host ADT emits real 0..0x700 MPIDRs from verified live DT;
+CLI --cpus8 selects PSCI SMP (not hardware-proven yet). --display-mode fit
+keeps known UIKit1125x2436 canvas, cached composition, nearest-neighbour
+scales to full1240x2772, writes only changed64-pixel tiles, full redraw after
+wake. Default desired fb30Hz. No scanout cache-policy changes. 26 small host
+checks pass, including compiled pixel output/stride/dirty/wake and8CPU ADT.
+Await kernel CI then build real iOS variants --cpus8 /6 /1 --display-mode fit
+--fb-hz30 using build/phone-ios-smp-profile.json. Root linux already verified;
+do NOT rebuild or write12GiB again. ESP only through BusyBox dd in recovery.
+Phone still in iOS, manual recovery required when image ready. Input drivers
+remain separate work (PMIC arbv7 keys, Synaptics S3910 TCM SPI HBP).
+Autoboot postponed until speed/display/input improved. Old working ESP2 saved.
+
+## READ FIRST: XIGUA lock screen confirmed; QEMU forbidden — 2026-10-21
+
+User confirms actual iOS lock screen (red clock) on OnePlus after Apple logo
+and black screen. Known-good kernel1d5c416 CI39646487365, root linux12GiB,
+ESP out/efi-ios-ram-2. No boot flashed. Touch/buttons do not work, display
+geometry wrong and visible slow rendering. User now requests SMP6/8 cores,
+proper display fit/performance and functional inputs. Improve before autoboot.
+USER EXPLICITLY ORDERED LOCAL QEMU OFF. All QEMU terminated, active=[] checked,
+qemu-ios-memory1..4 temporary backing files deleted. NEVER restart QEMU.
+Kernel builds in GitHub Actions; use small host checks only. Phone in iOS;
+manual recovery needed for new ESP because no USB driver. See parent STATUS.md
+(new requirements) for verified CPU, GIC, display/input details and next work.
+Local sampler hook reverted;0082 still matches known-good CI. Current public
+head f8f9845; source changes for performance/input not implemented yet.
+
 ## XIGUA user reports iOS launch on hardware — 2026-10-21
 
 User sequence: Apple logo without progress bar -> black screen -> excited

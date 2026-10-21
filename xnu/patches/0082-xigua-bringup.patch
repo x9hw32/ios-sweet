@@ -1226,7 +1226,7 @@
 --- /dev/null
 +++ b/config/MASTER.arm64.xigua
 @@ -0,0 +1,116 @@
-+# XIGUA: SM8550 single-CPU RAM-root bring-up. Reuses donor generic ARM support.
++# XIGUA: SM8550 PSCI SMP RAM-root. Reuses donor generic ARM support.
 +#
 +# sweet (Redmi Note 10 Pro, SM7150): MASTER.arm64.MacOSX plus the open-source
 +# arm64 assembly and pmap (nos_arm_asm, nos_arm_pmap). Apple's own SoC configs
@@ -1392,7 +1392,7 @@
  #include <pexpert/arm64/board_config.h>
  
  #if defined(SWEET)
-@@ -76,7 +77,7 @@
+@@ -76,13 +77,17 @@
  	/* MPIDR Aff1 = core: 0x000-0x500 A55, 0x600/0x700 A76 */
  	if (cpu->phys_id > 0x700 || (cpu->phys_id & 0xff) != 0 ||
  	    topology->num_cpus > SWEET_SMP_MAX_CPUS) {
@@ -1401,7 +1401,17 @@
  		    cpu->cpu_id, cpu->phys_id, topology->num_cpus);
  	}
  	if (!IOCPU::start(provider)) {
-@@ -101,10 +102,10 @@
+ 		return false;
+ 	}
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++	cpuName = OSSymbol::withCStringNoCopy("Snapdragon 8 Gen 2");
++#else
+ 	cpuName = OSSymbol::withCStringNoCopy("Kryo 470");
++#endif
+ 	if (cpuName == NULL) {
+ 		return false;
+ 	}
+@@ -101,10 +106,10 @@
  	perfmon_interrupt_handler_func pmi_handler = NULL;
  	kern_return_t result = ml_processor_register(&info, &machProcessor, &ipi_handler, &pmi_handler);
  	if (result != KERN_SUCCESS) {
@@ -1414,7 +1424,7 @@
  	}
  
  	registerService();
-@@ -114,7 +115,7 @@
+@@ -114,7 +119,7 @@
  		thread_t thread;
  		result = kernel_thread_start(&SweetCPU::startAll, NULL, &thread);
  		if (result != KERN_SUCCESS) {
@@ -1423,7 +1433,7 @@
  		}
  		thread_deallocate(thread);
  	}
-@@ -128,7 +129,7 @@
+@@ -128,7 +133,7 @@
  	const ml_topology_info_t *topology = ml_get_topology_info();
  	uint32_t requested = 1;
  	PE_parse_boot_argn("cpus", &requested, sizeof(requested));
@@ -1432,7 +1442,7 @@
  	    requested, topology->num_cpus, SWEET_SMP_MAX_CPUS);
  
  	uint64_t deadline;
-@@ -137,35 +138,35 @@
+@@ -137,35 +142,35 @@
  		if (mach_absolute_time() > deadline) {
  			for (unsigned int i = 0; i < topology->num_cpus; i++) {
  				if (__atomic_load_n(&sweet_cpus[i], __ATOMIC_ACQUIRE) == NULL) {
@@ -1475,7 +1485,7 @@
  		    i, topology->cpus[i].phys_id);
  	}
  	/* Publish exactly once, after every selected CPU has completed initCPU(). */
-@@ -173,7 +174,7 @@
+@@ -173,7 +178,7 @@
  	__atomic_load_n(&sweet_cpus[topology->boot_cpu->cpu_id], __ATOMIC_ACQUIRE)->cpusRunning();
  	IOService::publishResource(gIOAllCPUInitializedKey, kOSBooleanTrue);
  	ml_set_max_cpus(topology->max_cpu_id + 1);
@@ -1484,7 +1494,7 @@
  	    topology->num_cpus, topology->num_cpus);
  	thread_terminate(current_thread());
  }
-@@ -189,7 +190,7 @@
+@@ -189,7 +194,7 @@
  SweetCPU::initCPU(bool boot)
  {
  	if (!boot) {
@@ -1493,7 +1503,7 @@
  	}
  	assert(cpu_number() == (int)getCPUNumber());
  
-@@ -200,7 +201,7 @@
+@@ -200,7 +205,7 @@
  	 * Waiting here with DAIF.I set would deadlock every secondary. */
  	signalCPU(this);
  	setCPUState(kIOCPUStateRunning);
@@ -1502,7 +1512,7 @@
  	    getCPUNumber(), __builtin_arm_rsr64("MPIDR_EL1") & 0xffffULL,
  	    __builtin_arm_rsr64("CurrentEL") >> 2, ml_get_interrupts_enabled());
  	__atomic_store_n(&initialized, 1, __ATOMIC_RELEASE);
-@@ -212,13 +213,13 @@
+@@ -212,13 +217,13 @@
  	const ml_topology_info_t *topology = ml_get_topology_info();
  	unsigned int logical = target->getCPUNumber();
  	if (logical >= topology->num_cpus) {
@@ -1518,7 +1528,7 @@
  	}
  	uint64_t sgi = (((mpidr >> 32) & 0xff) << 48) |
  	    (((mpidr >> 16) & 0xff) << 32) |
-@@ -236,17 +237,17 @@
+@@ -236,17 +241,17 @@
  	/* cpu_start() passes NULL,NULL: x20/x21 are set by LowResetVectorBase. */
  	if (start_paddr != 0 || arg_paddr != 0 || cpu->phys_id == 0 ||
  	    __atomic_load_n(&initialized, __ATOMIC_ACQUIRE) != 0) {
@@ -1540,7 +1550,7 @@
  	}
  	return KERN_SUCCESS;
  }
-@@ -254,13 +255,13 @@
+@@ -254,13 +259,13 @@
  void
  SweetCPU::quiesceCPU(void)
  {
@@ -1566,7 +1576,28 @@
  #include "SweetSurface.h"
  
  extern "C" int sweet_console_muted;     /* osfmk/console/serial_console.c */
-@@ -163,14 +164,18 @@
+@@ -50,6 +51,9 @@
+ #include <pexpert/pexpert.h>
+ #include <kern/clock.h>
+ #include <sys/proc.h>
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++#include "XiguaBlit.h"
++#endif
+ 
+ enum {
+ 	kSweetFBGetLayerDefaultSurface  = 3,
+@@ -114,6 +118,10 @@
+ 	uint8_t       fPending[SWEET_FB_SWAP_REC_SIZE];     /* latest swap, not yet shown */
+ 	bool          fDirty;
+ 	uint32_t      fFlushTicks;    /* vsync ticks between panel copies */
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++	uint32_t *fCanvas, *fPrevious, *fXMap, *fYMap;
++	bool fFit, fForce;
++#endif
+ 	bool          fPowerOff;      /* RequestPowerChange(0) */
+ 	uint32_t      fFadeStep;      /* fade-out steps done while off */
+ 
+@@ -163,14 +171,18 @@
  	fHeight = (uint32_t)video.v_height;
  	fRowBytes = (uint32_t)video.v_rowBytes;
  	if (fPhys == 0 || fWidth == 0 || fHeight == 0 || fRowBytes < fWidth * 4) {
@@ -1586,7 +1617,7 @@
  		fLogicalW = SWEET_FB_LOGICAL_W;
  		fLogicalH = SWEET_FB_LOGICAL_H;
  	}
-@@ -182,14 +187,14 @@
+@@ -182,17 +194,21 @@
  	fPixels = fSurface != NULL ? fSurface->kernelAddress() : 0;
  	fWorkLoop = IOWorkLoop::workLoop();
  	if (fLock == NULL || fClients == NULL || fPixels == 0 || fWorkLoop == NULL) {
@@ -1602,17 +1633,55 @@
 +		IOLog(ARM_BOARD_NAME " FB: no vsync timer\n");
  		return false;
  	}
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++	uint32_t hz = 30;
++#else
  	uint32_t hz = 10;
-@@ -201,7 +206,7 @@
++#endif
+ 	PE_parse_boot_argn("sweetfb_hz", &hz, sizeof(hz));
+ 	fFlushTicks = (hz == 0 || hz >= 60) ? 1 : 60 / hz;
+ 	fVsync->setTimeoutUS(SWEET_FB_VSYNC_US);
+@@ -200,8 +216,38 @@
+ 	setProperty(kIOUserClientClassKey, "IOMobileFramebufferUserClient");
  	setProperty("external", false);
  	setProperty("DisplayPipePlaneBaseAlignment", 64ULL, 32);
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++	fFit = false;
++	fForce = true;
++	int fit = 0;
++	PE_parse_boot_argn("sweetfb_fit", &fit, sizeof(fit));
++	if (fit && fLogicalW && fLogicalH && fWidth <= 8192 && fHeight <= 8192) {
++		size_t canvasBytes = (size_t)fLogicalW * fLogicalH * 4;
++		size_t previousBytes = (size_t)fWidth * fHeight * 4;
++		fCanvas = (uint32_t *)IOMallocZeroData(canvasBytes);
++		fPrevious = (uint32_t *)IOMallocZeroData(previousBytes);
++		fXMap = (uint32_t *)IOMallocData(fWidth * 4);
++		fYMap = (uint32_t *)IOMallocData(fHeight * 4);
++		if (fCanvas && fPrevious && fXMap && fYMap) {
++			for (uint32_t x = 0; x < fWidth; x++)
++				fXMap[x] = (uint64_t)x * fLogicalW / fWidth;
++			for (uint32_t y = 0; y < fHeight; y++)
++				fYMap[y] = (uint64_t)y * fLogicalH / fHeight;
++			fFit = true;
++			fOffX = fOffY = 0;
++			IOLog("XIGUA FB: full-panel fit enabled, cached composition and changed tiles\n");
++		} else {
++			if (fCanvas) IOFreeData(fCanvas, canvasBytes);
++			if (fPrevious) IOFreeData(fPrevious, previousBytes);
++			if (fXMap) IOFreeData(fXMap, fWidth * 4);
++			if (fYMap) IOFreeData(fYMap, fHeight * 4);
++			fCanvas = fPrevious = fXMap = fYMap = NULL;
++			IOLog("XIGUA FB: fit allocation failed; centered display fallback\n");
++		}
++	}
++#endif
  	registerService();
 -	IOLog("SWEET FB: AppleCLCD %ux%u stride %u at 0x%llx, default surface %u, presented as %ux%u\n",
 +	IOLog(ARM_BOARD_NAME " FB: AppleCLCD %ux%u stride %u at 0x%llx, default surface %u, presented as %ux%u\n",
  	    fWidth, fHeight, fRowBytes, fPhys, fSurface->id, fLogicalW, fLogicalH);
  	return true;
  }
-@@ -304,7 +309,7 @@
+@@ -304,7 +350,7 @@
  	fDirty = true;
  	IOLockUnlock(fLock);
  	if ((++sweet_fb_swap_count % 1000) == 0) {
@@ -1621,7 +1690,24 @@
  	}
  }
  
-@@ -338,7 +343,7 @@
+@@ -312,6 +358,16 @@
+ AppleCLCD::present(const uint8_t *rec)
+ {
+ 	uint32_t mask = get32(rec, 0x104);
++	uintptr_t target = fPixels;
++	uint32_t targetWidth = fWidth, targetHeight = fHeight, targetStride = fRowBytes;
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++	if (fFit) {
++		target = (uintptr_t)fCanvas;
++		targetWidth = fLogicalW;
++		targetHeight = fLogicalH;
++		targetStride = fLogicalW * 4;
++	}
++#endif
+ 
+ 
+ 	if (!fConsolePaused) {
+@@ -338,7 +394,7 @@
  		SweetSurface *s = sweet_surface_copy(id);
  		if (sweet_fb_swaps_logged < 16) {
  			sweet_fb_swaps_logged++;
@@ -1630,7 +1716,46 @@
  			    get32(rec, 0x50), layer, id, s ? s->width : 0, s ? s->height : 0,
  			    s ? s->pixelFormat : 0, s ? s->bytesPerRow : 0, sx, sy, get32(a, 8),
  			    get32(a, 12), dx, dy, w, h);
-@@ -528,7 +533,7 @@
+@@ -378,11 +434,11 @@
+ 		if (h > (int32_t)s->height - sy) {
+ 			h = (int32_t)s->height - sy;
+ 		}
+-		if (w > (int32_t)fWidth - dx) {
+-			w = (int32_t)fWidth - dx;
+-		}
+-		if (h > (int32_t)fHeight - dy) {
+-			h = (int32_t)fHeight - dy;
++		if (w > (int32_t)targetWidth - dx) {
++			w = (int32_t)targetWidth - dx;
++		}
++		if (h > (int32_t)targetHeight - dy) {
++			h = (int32_t)targetHeight - dy;
+ 		}
+ 		uint64_t last = (uint64_t)s->offset + (uint64_t)(sy + h - 1) * s->bytesPerRow +
+ 		    (uint64_t)(sx + w) * 4;
+@@ -392,13 +448,20 @@
+ 		}
+ 		if (src != 0 && bpe == 4) {
+ 			for (int32_t y = 0; y < h; y++) {
+-				memcpy((void *)(fPixels + (uint64_t)(dy + y) * fRowBytes + (uint64_t)dx * 4),
++				memcpy((void *)(target + (uint64_t)(dy + y) * targetStride + (uint64_t)dx * 4),
+ 				    (const void *)(src + s->offset + (uint64_t)(sy + y) * s->bytesPerRow + (uint64_t)sx * 4),
+ 				    (size_t)w * 4);
+ 			}
+ 		}
+ 		s->release();
+ 	}
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++	if (fFit) {
++		bool force = __atomic_exchange_n(&fForce, false, __ATOMIC_ACQ_REL);
++		(void)xigua_blit_flush(fCanvas, fLogicalW, fXMap, fYMap, fPrevious,
++		    (uint8_t *)fPixels, fWidth, fHeight, fRowBytes, force, memcpy);
++	}
++#endif
+ }
+ 
+ bool
+@@ -528,7 +591,7 @@
  			IOLockUnlock(fFB->fLock);
  			char name[32];
  			proc_selfname(name, sizeof(name));
@@ -1639,7 +1764,13 @@
  			    args->scalarInput[0] ? "on" : "off");
  		}
  		break;
-@@ -542,7 +547,7 @@
+@@ -539,10 +602,13 @@
+ 			if (off != fFB->fPowerOff) {
+ 				fFB->fPowerOff = off;
+ 				fFB->fFadeStep = 0;
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++				if (!off) __atomic_store_n(&fFB->fForce, true, __ATOMIC_RELEASE);
++#endif
  				fFB->fDirty = true;     /* on: redraw the latest frame */
  			}
  			IOLockUnlock(fFB->fLock);
@@ -1648,7 +1779,7 @@
  		}
  		break;
  	case kSweetFBSwapWait:
-@@ -562,7 +567,7 @@
+@@ -562,7 +628,7 @@
  		}
  		char name[32];
  		proc_selfname(name, sizeof(name));
@@ -1784,6 +1915,49 @@
  		    args->scalarInputCount, args->structureInputSize,
  		    args->scalarOutputCount, args->structureOutputSize);
  	}
+--- /dev/null
++++ b/iokit/Kernel/arm/XiguaBlit.h
+@@ -0,0 +1,40 @@
++/* Nearest-neighbour panel scaling with a cached copy of the last scanout.
++ * No display MMIO reads: unchanged tiles never touch the physical panel.
++ * Caller validates dimensions and supplies maps/buffers and memcpy.
++ */
++#ifndef XIGUA_BLIT_H
++#define XIGUA_BLIT_H
++#include <stdint.h>
++#include <stddef.h>
++
++typedef void *(*xigua_copy_bytes)(void *, const void *, size_t);
++
++static inline uint64_t
++xigua_blit_flush(const uint32_t *canvas, uint32_t canvas_width,
++    const uint32_t *xmap, const uint32_t *ymap, uint32_t *previous,
++    uint8_t *panel, uint32_t width, uint32_t height, uint32_t stride,
++    int force, xigua_copy_bytes copy)
++{
++    uint64_t written = 0;
++    for (uint32_t y = 0; y < height; y++) {
++        const uint32_t *src = canvas + (uint64_t)ymap[y] * canvas_width;
++        uint32_t *last = previous + (uint64_t)y * width;
++        uint8_t *dst = panel + (uint64_t)y * stride;
++        for (uint32_t x = 0; x < width; x += 64) {
++            uint32_t tile[64];
++            uint32_t count = width - x < 64 ? width - x : 64;
++            int changed = force;
++            for (uint32_t i = 0; i < count; i++) {
++                tile[i] = src[xmap[x + i]];
++                changed |= tile[i] != last[x + i];
++            }
++            if (changed) {
++                copy(dst + (uint64_t)x * 4, tile, count * 4);
++                copy(last + x, tile, count * 4);
++                written += count * 4;
++            }
++        }
++    }
++    return written;
++}
++#endif
 --- a/iokit/Kernel/arm/hid/SweetHID.cpp
 +++ b/iokit/Kernel/arm/hid/SweetHID.cpp
 @@ -16,6 +16,7 @@
@@ -2045,7 +2219,28 @@
  #include <stdint.h>
  #include <libkern/section_keywords.h>
  #include <arm64/proc_reg.h>
-@@ -116,7 +117,7 @@
+@@ -56,7 +57,7 @@
+ 	// We only care about aff1 and aff0
+ 	uint32_t phys_id = __builtin_arm_rsr64("MPIDR_EL1") & (MPIDR_AFF1_MASK | MPIDR_AFF0_MASK);
+ 
+-	for (vm_offset_t offset = 0; offset < gicr_size; offset += GICR_PE_SIZE) {
++	for (vm_offset_t offset = 0; offset + GICR_TYPER + 8 <= gicr_size;) {
+ 		vm_offset_t gicr_pe_base = gicr_base + offset;
+ 		uint64_t gicr_typer = gicr_read64(GICR_TYPER);
+ 		uint32_t aff_value = (uint32_t) (gicr_typer >> GICR_TYPER_AFFINITY_VALUE_SHIFT) & (MPIDR_AFF1_MASK | MPIDR_AFF0_MASK);
+@@ -68,6 +69,11 @@
+ 		if (gicr_typer & GICR_TYPER_LAST) {
+ 			break;
+ 		}
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++		offset += (gicr_typer & 2ULL) ? 0x40000 : GICR_PE_SIZE;
++#else
++		offset += GICR_PE_SIZE;
++#endif
+ 	}
+ 
+ 	panic("%s: cannot find GICR base for core %u", __func__, ml_get_cpu_number(phys_id));
+@@ -116,7 +122,7 @@
  			}
  			sweet_vtimer_intid = intid;
  		}
@@ -2078,7 +2273,7 @@
 +#undef SWEET_VTIMER_INTID
 +#define SWEET_VTIMER_INTID 27
 +#undef SWEET_SMP_MAX_CPUS
-+#define SWEET_SMP_MAX_CPUS 1
++#define SWEET_SMP_MAX_CPUS 8
 +#endif
 --- a/pexpert/pexpert/arm64/board_config.h
 +++ b/pexpert/pexpert/arm64/board_config.h

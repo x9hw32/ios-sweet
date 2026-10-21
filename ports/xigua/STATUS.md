@@ -1,5 +1,42 @@
 # XIGUA handoff — 2026-10-21
 
+## Текущие требования после первого GUI
+
+- НАСТОЯЩИЙ АППАРАТНЫЙ GUI ПОДТВЕРЖДЁН: пользователь увидел экран блокировки
+  iOS с красными часами после Apple logo -> чёрного экрана. Kernel1d5c416,
+  CI39646487365, ESP out/efi-ios-ram-2, root linux verified12GiB.
+- Пользователь просит исправить размер интерфейса, очень медленную/видимую
+  отрисовку, включить хотя бы 6 или 8 CPU. Сообщил: тач и все кнопки не работают.
+  Новая работа: SMP8 + framebuffer/layout/performance + кнопки + Synaptics SPI.
+  Автозагрузку пока не устанавливать, сначала улучшить рабочую сборку.
+- ПРЯМОЙ ЗАПРЕТ ПОЛЬЗОВАТЕЛЯ: выключить локальный QEMU, расходует ресурсы ноутбука.
+  Все QEMU остановлены, проверено active=[]; backing qemu-ios-memory-1..4.bin
+  удалены. БОЛЬШЕ QEMU НЕ ЗАПУСКАТЬ. Kernel собирать в GitHub Actions, локально
+  допустимы небольшие проверки кода/профилей. Никакие таймеры QEMU не оставлены.
+- Телефон остаётся в iOS, USB/ADB и кнопки в XNU пока не реализованы. Для новой
+  записи ESP потребуется ручной перевод пользователем в recovery с ADB.
+- Проверено по live DT: CPU MPIDR 0,0x100,...,0x700; PSCI1.0 method smc.
+  Текущий kernel SMP limit1, ADT1CPU, command cpus=1. Donor SMP8 уже умеет
+  эти MPIDR; нужно убрать лимит XIGUA, добавить CPU nodes в наш ADT/CLI.
+- GICR scanner сейчас фиксированно шагает0x20000. Для SM8550 следует учитывать
+  VLPIS bit1 в GICR_TYPER (stride0x40000), сохраняя границы региона.
+- Framebuffer сейчас логический1125x2436, панель1240x2772, центрируется без
+  масштабирования. Default10Hz. Canvas disp0 тоже1125x2436 (НЕ1080x2400).
+  sweetfb_native=1 есть в доноре, но неизвестный UIKit screen class способен
+  показывать red rdar banner. Нужно решить fit/native по ответу пользователя:
+  задан вопрос: поля/обрезано/неверные пропорции. Есть write-combine mapping.
+- Исходники для ввода: live DT содержит PMIC arb v7 layout: core c400000/3000,
+  cnfg c42d000/4000, observer c440000/80000, chnls c500000/400000, ee0,bus0.
+  PM8550 SID1 GPIO6 volume-up; PMK8550 SID0 PON. Нужен точный PN RT layout.
+  Тач активный synaptics,tcm-spi-hbp at a90000, S3910, IRQ TLMM25 active-low,
+  reset TLMM24, AVDD TLMM10, SPI19MHz, mode0. Старый synaptics-s3910 disabled.
+  Не активировать чужие SM7150 драйверы.
+- Официальные исходники для исследования: torvalds/linux drivers/spmi/
+  spmi-pmic-arb.c и OnePlusOSS/android_kernel_modules_and_devicetree_oneplus_sm8550.
+- Последний публичный commit f8f9845 (ещё только reported launch, нужно обновить
+  milestone до подтверждённого lock screen). 0082 локально совпал с CI1d5c416;
+  sampler BSD-hook был отменён до commit/CI. Новых изменений kernel пока нет.
+
 ## Актуальное состояние: пользователь сообщил запуск iOS на телефоне
 
 - Root iOS 20H392, 12 GiB записан в linux и полностью проверен readback SHA-256:

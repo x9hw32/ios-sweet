@@ -27,6 +27,11 @@ def main():
     p.add_argument('--external-ramdisk-base', type=lambda x: int(x, 0))
     p.add_argument('--external-ramdisk-size', type=lambda x: int(x, 0))
     p.add_argument('--ios-userland', action='store_true', help='Enable the iOS display service and launchd boot arguments')
+    p.add_argument('--cpus', type=int, choices=range(1, 9), default=1,
+                   help='Number of verified CPU nodes to enable (default 1)')
+    p.add_argument('--fb-hz', type=int, choices=range(1, 61), default=30,
+                   help='Maximum framebuffer presentation rate for iOS (default 30)')
+    p.add_argument('--display-mode', choices=['iphone-x', 'native', 'fit'], default='iphone-x')
     p.add_argument('--stock-boot', type=Path)
     p.add_argument('--experimental-abl-framebuffer', action='store_true',
                    help='Allow a Mu GOP framebuffer to be tested under ABL; scanout is unverified')
@@ -37,6 +42,8 @@ def main():
     if external and (not a.kernel or a.ramdisk or not a.external_ramdisk_base or not a.external_ramdisk_size):
         p.error('External RAM disk requires a kernel and both base/size, without --ramdisk')
     profile = json.loads(a.profile.read_text())
+    profile['cpu_count'] = a.cpus
+    profile['display_mode'] = a.display_mode
     if a.ios_userland:
         profile['gui'] = True
     fb = profile['framebuffer']
@@ -55,11 +62,16 @@ def main():
     info = {'kind': 'diagnostic', 'profile': profile}
     payload = out / 'payload.bin'
     if a.kernel:
-        command = ('debug=0xc serial=3 cpus=1 keepsyms=1 -enable_kprintf_spam -noprogress '
+        command = (f'debug=0xc serial=3 cpus={a.cpus} keepsyms=1 -enable_kprintf_spam -noprogress '
                    'rd=md0 sweetusb=0 sweettouch=0 sweetkeys=0 sweetlog=0 sweetbattery=0 '
                    'ufsrw=0 wdt=-1 wdt_test=no_user_checkin')
         if a.ios_userland:
             command += ' unentitled_ios_sim_launch=1 ignition_level=1 rootrw=1 launchd_unsecure_cache=1 sweetfb_noconsole=1'
+            command += f' sweetfb_hz={a.fb_hz}'
+            if a.display_mode == 'native':
+                command += ' sweetfb_native=1'
+            elif a.display_mode == 'fit':
+                command += ' sweetfb_fit=1'
         blob, kernel_info = mkpayload.build(str(a.kernel), str(tree), command,
                                             str(a.ramdisk) if a.ramdisk else None)
         if kernel_info['cpusub'] != 0:

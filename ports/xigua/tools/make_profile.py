@@ -87,6 +87,8 @@ def make_profile(dtb, report, large_ram=False):
     gic = board['devices']['gic']['reg']
     return {'model': 'PJA110', 'kind': 'phone', 'dtb_sha256': board['dtb_sha256'],
             'boot_mpidr': values['mpidr_el1'] & 0xffffff, 'timebase': values['cntfrq_el0'],
+            'cpu_mpidrs': [int(c['mpidr'], 16) for c in board['cpus']
+                           if c['enable_method'] == ['psci']],
             'virtual_timer_intid': board['devices']['timer']['virtual_timer_intid'],
             'gicd': int(gic[0]['base'], 16), 'gicd_size': int(gic[0]['size'], 16),
             'gicr': int(gic[1]['base'], 16), 'gicr_size': int(gic[1]['size'], 16),

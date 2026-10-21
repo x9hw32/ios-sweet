@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build a single-CPU, RAM-root ADT from an explicit XIGUA/QEMU profile."""
 import argparse
+import copy
 import json
 from pathlib import Path
 import struct
@@ -31,11 +32,25 @@ def make(profile):
         put(chosen, key, b'xigua-shim\0')
     put(root, 'compatible', b'D22AP\0iPhone10,3\0oneplus,xigua\0qcom,sm8550\0AppleARM\0')
     cpus = next(n for n in root.children if n.name == 'cpus')
-    cpu = cpus.children[0]
-    put(cpu, 'compatible', b'qcom,kryo\0ARM,v8\0')
-    put(cpu, 'reg', struct.pack('<I', profile['boot_mpidr']))
-    for key in ['timebase-frequency', 'peripheral-frequency', 'fixed-frequency']:
-        put(cpu, key, struct.pack('<I', profile['timebase']))
+    count = profile.get('cpu_count', 1)
+    mpidrs = profile.get('cpu_mpidrs', [profile['boot_mpidr']])
+    if (not isinstance(count, int) or not 1 <= count <= 8 or count > len(mpidrs) or
+            len(mpidrs) != len(set(mpidrs)) or mpidrs[0] != profile['boot_mpidr'] or
+            any(not isinstance(m, int) or m < 0 or m > 0x700 or m & 0xff for m in mpidrs)):
+        raise ValueError('CPU count/MPIDRs must match the verified single-cluster PSCI topology')
+    template = cpus.children[0]
+    cpus.children = []
+    for index, mpidr in enumerate(mpidrs[:count]):
+        cpu = copy.deepcopy(template)
+        for key, value in [('reg', mpidr), ('cpu-id', index), ('cluster-core-id', index),
+                           ('l2-cache-id', index), ('AAPL,phandle', 0x1000 + index)]:
+            put(cpu, key, struct.pack('<I', value))
+        put(cpu, 'name', f'cpu{index}\0'.encode())
+        put(cpu, 'state', b'running\0' if index == 0 else b'stopped\0')
+        put(cpu, 'compatible', b'qcom,kryo\0ARM,v8\0')
+        for key in ['timebase-frequency', 'peripheral-frequency', 'fixed-frequency']:
+            put(cpu, key, struct.pack('<I', profile['timebase']))
+        cpus.children.append(cpu)
     io = next(n for n in root.children if n.name == 'arm-io')
     gic = next(n for n in io.children if n.name == 'gic')
     put(gic, 'reg', struct.pack('<4Q', profile['gicd'] - mkadt.SOC_BASE,
@@ -46,6 +61,10 @@ def make(profile):
     if not profile.get('gui'):
         io.children = [n for n in io.children if n.name != 'disp0']
     fb = profile['framebuffer']
+    if profile.get('gui') and profile.get('display_mode') == 'native':
+        display = next(n for n in io.children if n.name == 'disp0')
+        put(display, 'canvas-width', struct.pack('<I', fb['width']))
+        put(display, 'canvas-height', struct.pack('<I', fb['height']))
     console = next(n for n in root.children if n.name == 'sweet-fbcon')
     put(console, 'reg', struct.pack('<2Q', fb['base'], fb['size']))
     for key in ['width', 'height', 'stride']:
