@@ -19,6 +19,7 @@ def main():
     p.add_argument('--native', type=Path, required=True, help='Directory produced by build_boot.py')
     p.add_argument('--esp-template', type=Path, required=True)
     p.add_argument('--root-image', type=Path)
+    p.add_argument('--root-crc-cache', type=Path, help='Reuse a CRC table tied to the prepared root SHA-256 receipt')
     p.add_argument('--root-base', type=lambda x: int(x, 0))
     p.add_argument('--root-partition', choices=['linux', 'installer'], default='linux')
     p.add_argument('--output', type=Path, required=True)
@@ -42,7 +43,18 @@ def main():
     out.mkdir(parents=True, exist_ok=False)
     chunk = 4 * 1024 * 1024
     crcs = []
-    if a.root_image:
+    root_sha = None
+    if a.root_image and (a.root_image.parent / 'root.json').exists():
+        root_sha = json.loads((a.root_image.parent / 'root.json').read_text())['root_sha256']
+    if a.root_crc_cache:
+        cached = json.loads(a.root_crc_cache.read_text())
+        if (not a.root_image or not root_sha or cached['root_sha256'] != root_sha or
+                cached['root_bytes'] != root_bytes or cached['chunk_bytes'] != chunk or
+                len(cached['crcs']) != (root_bytes + chunk - 1) // chunk or
+                any(not isinstance(c, int) or not 0 <= c <= 0xffffffff for c in cached['crcs'])):
+            p.error('Root CRC cache identity/geometry mismatch')
+        crcs = cached['crcs']
+    elif a.root_image:
         with a.root_image.open('rb') as f:
             while data := f.read(chunk):
                 crcs.append(zlib.crc32(data))
@@ -80,6 +92,7 @@ def main():
                'esp_sha256': hashlib.file_digest(esp.open('rb'), 'sha256').hexdigest(),
                'esp_bytes': esp.stat().st_size, 'external_ramdisk': info.get('external_ramdisk'),
                'root_partition': a.root_partition if root_bytes else None,
+               'root_sha256': root_sha,
                'hardware_boot_verified': False}
     (out / 'build.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print(f'{esp}: {esp.stat().st_size} bytes; EFI transition requires validation')

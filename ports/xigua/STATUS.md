@@ -1,5 +1,45 @@
 # XIGUA handoff — 2026-10-21
 
+## СЕЙЧАС: только задача «8 ядер», аппаратный тест ожидает recovery
+
+- Новое правило пользователя: по одной задаче до подтверждения работы, проверки
+  сразу на телефоне. QEMU ЗАПРЕЩЁН и остановлен. Не работать сейчас над кнопками,
+  тачем, USB или разрешением параллельно. Пользователь запретил возврат к10Гц.
+- Порядок пересмотрен после вопроса о ядрах: СНАЧАЛА8CPU для скорости, затем
+  размер/рамки картинки, затем ввод. Тест CPU8 сохраняет известный iPhone X
+  canvas1125x2436 с рамками; framebuffer cap30Hz по требованию пользователя.
+- Kernel CI39654978298 SUCCESS, commit20e9296, CRC/SHA проверены.
+  SHA256 b74706cb0304704f0b5d06dae52f3dff85fddc643b4fe271b38e8d365b5062bc.
+- ГОТОВ ДЛЯ ТЕЛЕФОНА: out/phone-ios-cpu8-1 (cpus8, fb30, display iphone-x),
+  готовый96MiB ESP out/efi-ios-cpu8-1/esp.img. В payload проверены cpus=8,
+  sweetfb_hz=30, восемь ADT CPU nodes, fit flag отсутствует. Hardware8CPU
+  пока НЕ проверены. Старый kernel CI39646487365 работал на одном CPU.
+- out/phone-ios-display-1 и out/efi-ios-display-1 тоже построены:1CPU/fit/30Hz,
+  но это ОТЛОЖЕННЫЙ тест геометрии. НЕ устанавливать его вместо CPU8.
+- Root linux прежний, полностью verified12GiB; НЕ пересобирать/не писать снова.
+  tools/build_efi_boot.py --root-crc-cache принимает таблицу, связанную с root.json
+  SHA/геометрией. artifacts/ios-20H392/root-12g/verified-crcs.json получен из
+  loader-config ESP2, который уже загрузил этот root на аппарат с полным CRC.
+  Это предотвращает повторное чтение12GiB на HDD при каждом новом ESP.
+- Телефон кратко появился ADB (PJA110, ro.bootmode=reboot, uid0 KSU), затем
+  пропал ДО adb reboot recovery. Команда reboot не отправлена. Ни ADB, ни
+  fastboot не видны. Пользователю дано действие: подключить USB в recovery,
+  async вопрос о режиме задан. ESP сейчас по-прежнему рабочий ESP2, не CPU8.
+- Когда recovery появится: tools/probe_device.py restore --output
+  diagnostics/ios-before-cpu8-1 (сохранит весь текущий ESP2 и восстановит original),
+  затем install --prepared-image out/efi-ios-cpu8-1/esp.img. Install требует
+  исходный ESP, поэтому restore необходим. Оба действия BusyBox dd, full SHA.
+  Потом adb reboot bootloader, временно fastboot boot пользовательского
+  /home/rajok/Загрузки/Telegram Desktop/Mu-xigua-0.img; журнал ios-cpu8-boot-1.txt.
+  Не прошивать boot, не трогать linux. После boot проверить с пользователем
+  строки XIGUA CPU:8/8 CPUs initialized,SGI1 verified и время запуска iOS.
+- Keys/touch ИССЛЕДОВАНИЕ ОТЛОЖЕНО. Файлы .cache/input-source (официальные
+  Linux/OnePlus), refs build/oneplus-source-ref.json/tree.json. Важная поправка:
+  PMK8550 PON1310 bit7=power,bit6=Linux115 volume-up; PM8550GPIO6 RT8d10 active
+  low = Linux114 volume-down (несмотря на label vol_up). SPMIv7 map core+2000,
+  owner cnfg+4*apid, observer stride20, EE stride8000, bus0 apid count core+4.
+  Не реализовывать сейчас; вернуться после CPU и экрана.
+
 ## Текущие требования после первого GUI
 
 - НАСТОЯЩИЙ АППАРАТНЫЙ GUI ПОДТВЕРЖДЁН: пользователь увидел экран блокировки

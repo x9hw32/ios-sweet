@@ -1,3 +1,23 @@
+## READ FIRST: one task at a time; CPU8 hardware test ready — 2026-10-21
+
+USER: finish one task before another, test directly on PHONE; NO LOCAL QEMU;
+NO10Hz. All QEMU stopped/deleted backing memory. Current only task CPU8.
+Order:8CPU speed first, then full-panel geometry, then inputs. No more input
+research now. Existing iOS lock screen confirmed on1CPU, severe slowness,
+centered/bordered image, nonfunctional buttons/touch.
+CI39654978298 SUCCESS, commit20e9296, kernel SHA b74706cb...b5062bc verified.
+READY out/phone-ios-cpu8-1, ESP out/efi-ios-cpu8-1/esp.img:8CPU nodes/cpus8,
+fb30, OLD known iPhone X geometry (fit disabled). Hardware8CPU UNTESTED.
+Do NOT install display-1 variant (1CPU fit30): deferred to next task.
+Phone briefly ADB Android reboot/root then disconnected BEFORE reboot command.
+No new ESP writes. Await USB recovery; user asked its mode via async question.
+In recovery FIRST probe_device.py restore --output diagnostics/ios-before-cpu8-1
+(saves working ESP2, restores original required by install guard), THEN install
+--prepared-image out/efi-ios-cpu8-1/esp.img. Temporary fastboot boot Mu image.
+Root linux12GiB unchanged/verified; do not write again. Boot partitions untouched.
+CRC cache derived from successfully hardware-used ESP2 table, tied to root SHA,
+avoids rereading12GiB per rebuild. See ports/xigua/STATUS.md for exact actions.
+
 ## XIGUA SMP / full-panel rendering changes ready for CI — 2026-10-21
 
 Lock screen confirmed by user. CPU1, bordered centered iPhone X image with
