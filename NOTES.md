@@ -1,3 +1,34 @@
+## CPU6 hardware test sent — 2026-10-21
+
+ESP6 installed through recovery BusyBox dd, full SHA readback verified:
+08e2e3f36469accbb83e4460b1d8d39a726ef86eccf483286685f4cb88a00330.
+Previous failed CPU8 ESP backed up in diagnostics/ios-before-cpu6-1/
+esp-after-probe.img. Logs ios-before-cpu6-1.log, ios-cpu6-esp-install-1.log.
+Temporary fastboot Mu boot SUCCEEDED: Sending OKAY0.027s, Booting OKAY0.342s.
+Results diagnostics/ios-cpu6-boot-1.txt and .json are authoritative. SAME CI39654978298, cpus6/ADT6, fb30, fitOFF.
+Root linux and boot partitions unchanged. Await actual CPU6/6+SGI1 and iOS
+or next panic. CPU6 is not yet proven. If panic recurs, obtain FAR/ESR and
+GIC target; do not keep varying CPU count blindly. No QEMU/no display work.
+
+## CPU8 panic; CPU6 requested — 2026-10-21
+
+User reported panic(cpu 0 caller 0xfffffe0007ad4df8): Kernel data abort,
+pc 0xfffffe0007a77c54, lr 0xfffffe0007a77c44,
+saved state 0xfffffe00080b3b40. Exact CI39654978298 symbolication:
+pc = pe_init_fiq+0x1b4, instruction str w9,[x8,#0x80]!, writing
+GICR_IGROUPR0 (redistributor+0x10080); caller sleh_synchronous_sp1.
+FAR/ESR not available; cause NOT proven. Do not attribute to eight cores.
+User permits six cores and points to donor's six A55 support. SM8550 has
+other cores; donor's count does not prove an SM8550 limitation.
+
+Prepared out/phone-ios-cpu6-1 and out/efi-ios-cpu6-1/esp.img, SAME kernel
+CI39654978298 as failed CPU8. Only CPU selection differs: cpus=6,
+ADT MPIDRs 0..0x500 verified, fb30, old geometry, fit OFF. This isolates
+count; no GIC fix yet. Root linux unchanged. Phone observed Android root
+PJA110; adb reboot recovery sent. ESP6 installation/boot pending.
+Only current task SMP, target6 now acceptable. NO QEMU, NO10Hz, no inputs
+or display work until SMP confirmed. Working oneCPU ESP2 preserved.
+
 ## CPU8 hardware test1 NOW RUNNING — 2026-10-21
 
 Recovery reappeared. Full old working ESP2 backed up to
