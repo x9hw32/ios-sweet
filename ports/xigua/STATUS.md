@@ -1,3 +1,26 @@
+## CPU6 repeats GIC abort; MMIO instruction fix — 2026-10-21
+
+CPU6 attempt also PANICKED, same CI39654978298 PC0xfffffe0007a77c54;
+reported ESR0x96000010, FAR0xfffffe030db60080. No CPU6 success; count reduction
+alone did not fix anything. Panic is pe_init_fiq+0x1b4, str w9,[x8,#0x80]!,
+GICR_IGROUPR0. Known-working CI39646487365 uses a register-offset STR without
+base writeback instead. Candidate cause: EL2 MMIO emulation cannot decode
+pre/post-indexed access (ISV=0), injecting synchronous external abort. Gunyah
+upstream API explicitly limits emulation to single-register no-writeback loads/
+stores: https://github.com/quic/gunyah-hypervisor/blob/develop/docs/api/gunyah_api.md
+Firmware identity/cause NOT yet hardware-proven. Do not claim final fix yet.
+
+0082 now routes ONLY XIGUA GIC MMIO through explicit single-register ldr/str
+with register-only addresses and memory clobber. No security-group bypass,
+no physical address change, no stride change. Header kernel/xigua_mmio.h is
+staged as pexpert/arm64/XiguaMMIO.h. Added matched GICR affinity/offset/TYPER/VA
+log for hardware evidence. One focused ARM Apple-target code-generation test
+passes at O2/Os/O3 (rejects writeback/paired/unscaled accesses); full patch
+applies cleanly. Build new kernel remotely, inspect final binary, then build
+CPU6/30Hz/old geometry and ESP, install via recovery BusyBox dd. Root linux
+unchanged12GiB; no boot flash; no QEMU; display/input still deferred.
+Phone last on panic screen, no ADB at last check. Needs manual recovery.
+
 ## CPU6 hardware test sent — 2026-10-21
 
 ESP6 installed through recovery BusyBox dd, full SHA readback verified:

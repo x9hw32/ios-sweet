@@ -52,7 +52,9 @@ def overlay(source):
 #endif
 ''')
     replace('pexpert/pexpert/arm64/Makefile', '\tSWEET.h\n',
-            '\tSWEET.h \\\n\tXIGUA.h \\\n\tboard_name.h\n')
+            '\tSWEET.h \\\n\tXIGUA.h \\\n\tXiguaMMIO.h \\\n\tboard_name.h\n')
+    create('pexpert/pexpert/arm64/XiguaMMIO.h',
+           (Path(__file__).resolve().parent.parent / 'kernel/xigua_mmio.h').read_text())
     create('pexpert/pexpert/arm64/board_name.h', '''/* Runtime diagnostics use the selected board's name. */
 #ifndef _PEXPERT_ARM64_BOARD_NAME_H
 #define _PEXPERT_ARM64_BOARD_NAME_H
@@ -69,6 +71,17 @@ def overlay(source):
     # GICv4 redistributors with VLPI frames occupy 256 KiB, not 128 KiB.
     # Match each secondary by its MPIDR without probing the intervening frame.
     gic = 'pexpert/arm/pe_fiq.c'
+    replace(gic, '#include <pexpert/arm64/board_config.h>',
+            '#include <pexpert/arm64/board_config.h>\n'
+            '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n'
+            '#include <pexpert/arm64/XiguaMMIO.h>\n#endif')
+    for old, call in [
+            ('return *((volatile uint32_t *) addr);', 'return xigua_mmio_read32(addr);'),
+            ('return *((volatile uint64_t *) addr);', 'return xigua_mmio_read64(addr);'),
+            ('*((volatile uint32_t *) addr) = value;', 'xigua_mmio_write32(addr, value);')]:
+        replace(gic, '\t' + old,
+                '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n\t' + call +
+                '\n#else\n\t' + old + '\n#endif')
     replace(gic, 'for (vm_offset_t offset = 0; offset < gicr_size; offset += GICR_PE_SIZE) {',
             'for (vm_offset_t offset = 0; offset + GICR_TYPER + 8 <= gicr_size;) {')
     replace(gic, '''\t\tif (gicr_typer & GICR_TYPER_LAST) {
@@ -83,6 +96,12 @@ def overlay(source):
 \t\toffset += GICR_PE_SIZE;
 #endif
 ''')
+    replace(gic, '\t\tif (phys_id == aff_value) {\n\t\t\treturn gicr_pe_base;',
+            '\t\tif (phys_id == aff_value) {\n'
+            '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n'
+            '\t\t\tkprintf("XIGUA GIC: mpidr=0x%x RD offset=0x%llx TYPER=0x%llx VA=0x%llx\\n",\n'
+            '\t\t\t    phys_id, (uint64_t)offset, gicr_typer, (uint64_t)gicr_pe_base);\n'
+            '#endif\n\t\t\treturn gicr_pe_base;')
     replace('iokit/Kernel/arm/SweetCPU.cpp',
             '\tcpuName = OSSymbol::withCStringNoCopy("Kryo 470");',
             '''#if defined(ARM64_BOARD_CONFIG_XIGUA)
