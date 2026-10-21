@@ -1,3 +1,16 @@
+## CPU8 hardware test1 NOW RUNNING — 2026-10-21
+
+Recovery reappeared. Full old working ESP2 backed up to
+ diagnostics/ios-before-cpu8-1/esp-after-probe.img; original restored/verified,
+then out/efi-ios-cpu8-1/esp.img installed with full SHA verified. Temporary
+Mu fastboot boot succeeded: diagnostics/ios-cpu8-boot-1.txt/.json. Kernel
+CI39654978298 /20e9296, requested8CPU, fb30, old iPhone geometry, fit OFF.
+Root linux unchanged12GiB. No boot flash. User watching; do NOT reboot/restore.
+Await XIGUA CPU8/8 CPUs initialized,SGI1 verified or CPU/PSCI panic. Async
+question pending. Hardware8CPU NOT proven yet. Current only task8CPU; no
+further geometry/input work until proven. NO QEMU, user's explicit ban.
+Previous public head9a85144. Source/image details in ports/xigua/STATUS.md.
+
 ## READ FIRST: one task at a time; CPU8 hardware test ready — 2026-10-21
 
 USER: finish one task before another, test directly on PHONE; NO LOCAL QEMU;

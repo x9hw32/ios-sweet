@@ -1,6 +1,6 @@
 # XIGUA handoff — 2026-10-21
 
-## СЕЙЧАС: только задача «8 ядер», аппаратный тест ожидает recovery
+## СЕЙЧАС: только задача «8 ядер», тест уже запущен на телефоне
 
 - Новое правило пользователя: по одной задаче до подтверждения работы, проверки
   сразу на телефоне. QEMU ЗАПРЕЩЁН и остановлен. Не работать сейчас над кнопками,
@@ -275,3 +275,19 @@ recovery; монтировать разделы через BusyBox. Не про�
   QEMU4 (tool13291) private memory, out/qemu-ios-2, build/qemu-ios-4,
   build/qemu-ios-memory-4.bin; capture14 дошёл до backboardd IOKit lookups.
   QEMU3 остановлен вручную из-за 11 GiB mmap writeback на HDD (не panic).
+
+## Аппаратный CPU8 тест1 отправлен
+
+- Recovery появился сам после переподключения. Прежний рабочий ESP2 целиком
+  сохранён в diagnostics/ios-before-cpu8-1/esp-after-probe.img; затем original
+  ESP восстановлен и проверен, чтобы пройти install guard.
+- Новый ESP CPU8 установлен, full SHA verified:
+  5a682a7ba10f511479da05f085ef51c298e5f1ffc27eb5ea36e7be8dbb09b4f0.
+  Логи ios-before-cpu8-1.log, ios-cpu8-esp-install-1.log.
+- Временный fastboot boot Mu-xigua-0.img отправлен SUCCESS (Sending/Booting OKAY),
+  diagnostics/ios-cpu8-boot-1.txt и .json. Kernel39654978298, cpus8, fb30,
+  iphone-x geometry, fit DISABLED. Root linux не менялся. Boot не прошивался.
+- Пользователю сообщён критерий: XIGUA CPU:8/8 CPUs initialized, SGI1 verified.
+  Async вопрос о root-copy /8CPU/CPU-PSCI-panic/iOS открыт. ЕЩЁ НЕ ПОДТВЕРЖДЕНО8CPU.
+- Не трогать телефон, пока он наблюдает текущую попытку. Никакого QEMU.
+  До подтверждения8CPU не переходить к размеру картинки или вводу.
