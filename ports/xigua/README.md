@@ -2,7 +2,7 @@
 
 Экспериментальный перенос [ios-sweet](https://github.com/dipa-studio/ios-sweet)
 на SM8550. Цель: сначала автозагрузка iOS из boot, dual boot позже.
-**XNU на телефоне ещё не запускался.** Образы qemu-* предназначены для эмулятора.
+**XNU и тестовый PID 1 работают на телефоне. Apple launchd и GUI ещё не запущены.** Образы qemu-* предназначены для эмулятора.
 Текущее состояние, CI и продолжение работы — в [STATUS.md](STATUS.md).
 
 ## Подтверждено на телефоне
@@ -33,7 +33,7 @@
 - Native shim содержит XNU payload внутри Linux Image, проверяет все границы
   копирования и передаёт ADT/boot_args. UFS/USB/touch он не трогает.
 - EFI-проба и native shim проверены в QEMU. Донорское и наше XIGUA-ядро
-  смонтировали RAM-root, запустили тестовый PID 1 и heartbeat. 14 тестов валидатора и профиля проходят.
+  смонтировали RAM-root, запустили тестовый PID 1 и heartbeat. 22 проверки границ памяти, профиля и ограничений записи проходят.
 
 Форк: [x9hw32/ios-sweet, xigua-bringup](https://github.com/x9hw32/ios-sweet/tree/xigua-bringup).
 Apple IPSW, образы iOS, дампы и идентификаторы устройства исключены из git.
@@ -90,3 +90,25 @@ python3 tools/test_native_qemu.py out/qemu-diag/Image build/qemu-diag-test --sec
 
 Зависимости: Python 3, git, adb/fastboot, mtools, mkbootimg, GNU AArch64 toolchain,
 clang/lld, QEMU. XNU собирается на macOS через GitHub Actions с Xcode 15.
+
+## Настоящий root iOS через UEFI
+
+Для первого запуска системные файлы iPhone X 20H392 копируются в HFS+ root
+размером 12 ГиБ. Root хранится в выделенном linux; UEFI читает его в RAM
+и проверяет CRC каждого блока 4 МиБ. XNU использует md0. Изменения в таком
+RAM-root сохраняются только до перезагрузки; драйвер UFS SM8550 — отдельный этап.
+
+- tools/prepare_ios_root.py проверяет BuildManifest/ZIP CRC, создаёт root и root.json.
+- tools/make_profile.py --large-ram требует успешную пробу выделения RAM из EFI v2
+  и проверяет всю область по DT, EFI memory map и списку резервов.
+- tools/build_boot.py --ios-userland --external-ramdisk-base PA --external-ramdisk-size SIZE
+  подготавливает native Image с резервом для root. Он требует предварительной
+  загрузки root через UEFI; прямой fastboot boot такого образа не используется.
+- tools/build_efi_boot.py создаёт полный ESP из резервной копии, native Image
+  и EFI-загрузчика. Никаких записей на телефон эта сборка не делает.
+- tools/install_ios_root.py записывает проверенный root только в linux из recovery
+  через BusyBox и проверяет SHA-256 чтением всего записанного диапазона.
+- tools/probe_device.py install --prepared-image PATH устанавливает готовый ESP.
+  tools/probe_device.py restore --output PATH сохраняет текущий ESP и возвращает оригинал.
+
+Boot/root/ESP образы и Apple-компоненты исключены из git.

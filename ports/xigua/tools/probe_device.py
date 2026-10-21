@@ -25,10 +25,13 @@ def sha(path):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('action', choices=['install', 'collect-restore'])
+    p.add_argument('action', choices=['install', 'collect-restore', 'restore'])
     p.add_argument('--backup', type=Path, default=ROOT / 'backup/initial')
     p.add_argument('--output', type=Path, default=ROOT / 'diagnostics/uefi')
+    p.add_argument('--prepared-image', type=Path, help='Install a FAT image from build_efi_boot.py')
     a = p.parse_args()
+    if a.prepared_image and a.action != 'install':
+        p.error('--prepared-image is only valid with install')
 
     def root(command, *, out=None):
         r = subprocess.run(['adb', 'exec-out', 'sh -c ' + shlex.quote(command)],
@@ -59,14 +62,26 @@ def main():
         current = root('/sbin/busybox sha256sum ' + device).decode().split()[0]
         if current != sha(original):
             raise SystemExit('ESP changed since backup; take a fresh backup first')
-        image = ROOT / 'out/efi/esp-probe.img'
-        shutil.copyfile(original, image)
-        # mtools handles a 512-byte FAT BPB inside a 4-KiB-sector UFS partition.
-        subprocess.run(['mcopy', '-o', '-i', str(image),
-                        str(ROOT / 'out/efi/probe.efi'), '::/EFI/BOOT/BOOTAA64.EFI'], check=True)
-        probe = subprocess.check_output(['mtype', '-i', str(image), '::/EFI/BOOT/BOOTAA64.EFI'])
-        if probe != (ROOT / 'out/efi/probe.efi').read_bytes():
-            raise SystemExit('EFI readback from prepared image failed')
+        if a.prepared_image:
+            image = a.prepared_image
+            build = json.loads((image.parent / 'build.json').read_text())
+            if build['esp_sha256'] != sha(image) or build['esp_bytes'] != expected_size:
+                raise SystemExit('Prepared ESP receipt mismatch')
+            loader = subprocess.check_output(['mtype', '-i', str(image), '::/EFI/BOOT/BOOTAA64.EFI'])
+            if loader != (image.parent / 'BOOTAA64.EFI').read_bytes():
+                raise SystemExit('Prepared loader file mismatch')
+            native = subprocess.check_output(['mtype', '-i', str(image), '::/EFI/XIGUA/Image'])
+            if hashlib.sha256(native).hexdigest() != build['native_image_sha256']:
+                raise SystemExit('Prepared native Image mismatch')
+        else:
+            image = ROOT / 'out/efi/esp-probe.img'
+            shutil.copyfile(original, image)
+            # mtools handles a 512-byte FAT BPB inside a 4-KiB-sector UFS partition.
+            subprocess.run(['mcopy', '-o', '-i', str(image),
+                            str(ROOT / 'out/efi/probe.efi'), '::/EFI/BOOT/BOOTAA64.EFI'], check=True)
+            probe = subprocess.check_output(['mtype', '-i', str(image), '::/EFI/BOOT/BOOTAA64.EFI'])
+            if probe != (ROOT / 'out/efi/probe.efi').read_bytes():
+                raise SystemExit('EFI readback from prepared image failed')
         receipt = {'original_sha256': sha(original), 'probe_image_sha256': sha(image),
                    'size': expected_size, 'target': device}
         (ROOT / 'out/efi/install.json').write_text(json.dumps(receipt, indent=2) + '\n')
@@ -98,10 +113,10 @@ def main():
     if expected.encode() not in result.split():
         raise SystemExit('ESP write verification failed; original backup is available')
     print('ESP write and readback verified', flush=True)
-    if a.action == 'collect-restore':
-        if not reports:
+    if a.action in ['collect-restore', 'restore']:
+        if not reports and a.action == 'collect-restore':
             raise SystemExit('Original ESP restored, but no EFI probe report found; inspect esp-after-probe.img')
-        print('Original ESP restored; reports: ' + ', '.join(str(p) for p in reports))
+        print('Original ESP restored; reports: ' + (', '.join(str(p) for p in reports) or 'none expected'))
 
 
 if __name__ == '__main__':

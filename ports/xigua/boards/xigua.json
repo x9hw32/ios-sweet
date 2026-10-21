@@ -174,5 +174,7 @@
     "ram_probe_base": "0x881000000",
     "ram_probe_bytes": 16384,
     "ram_probe_passed": true
-  }
+  },
+  "hardware_xnu_boot_verified": true,
+  "hardware_userspace_pid1_verified": true
 }

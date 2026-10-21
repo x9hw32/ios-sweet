@@ -24,13 +24,21 @@ def main():
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--kernel', type=Path)
     p.add_argument('--ramdisk', type=Path)
+    p.add_argument('--external-ramdisk-base', type=lambda x: int(x, 0))
+    p.add_argument('--external-ramdisk-size', type=lambda x: int(x, 0))
+    p.add_argument('--ios-userland', action='store_true', help='Enable the iOS display service and launchd boot arguments')
     p.add_argument('--stock-boot', type=Path)
     p.add_argument('--experimental-abl-framebuffer', action='store_true',
                    help='Allow a Mu GOP framebuffer to be tested under ABL; scanout is unverified')
     a = p.parse_args()
     if a.ramdisk and not a.kernel:
         p.error('--ramdisk requires --kernel')
+    external = a.external_ramdisk_base is not None or a.external_ramdisk_size is not None
+    if external and (not a.kernel or a.ramdisk or not a.external_ramdisk_base or not a.external_ramdisk_size):
+        p.error('External RAM disk requires a kernel and both base/size, without --ramdisk')
     profile = json.loads(a.profile.read_text())
+    if a.ios_userland:
+        profile['gui'] = True
     fb = profile['framebuffer']
     if profile['kind'] != 'qemu' and not fb.get('abl_scanout_verified') and not a.experimental_abl_framebuffer:
         p.error('ABL scanout not verified; use --experimental-abl-framebuffer for a diagnostic experiment')
@@ -50,10 +58,30 @@ def main():
         command = ('debug=0xc serial=3 cpus=1 keepsyms=1 -enable_kprintf_spam -noprogress '
                    'rd=md0 sweetusb=0 sweettouch=0 sweetkeys=0 sweetlog=0 sweetbattery=0 '
                    'ufsrw=0 wdt=-1 wdt_test=no_user_checkin')
+        if a.ios_userland:
+            command += ' unentitled_ios_sim_launch=1 ignition_level=1 rootrw=1 launchd_unsecure_cache=1 sweetfb_noconsole=1'
         blob, kernel_info = mkpayload.build(str(a.kernel), str(tree), command,
                                             str(a.ramdisk) if a.ramdisk else None)
         if kernel_info['cpusub'] != 0:
             p.error('Only plain arm64 kernels are supported')
+        if external:
+            base, length = a.external_ramdisk_base, a.external_ramdisk_size
+            virt_base = int(kernel_info['virt_base'], 16)
+            kernel_end = int(kernel_info['kernel_end'], 16) - virt_base + ram
+            if (base % 0x4000 or length % 0x4000 or base < kernel_end or
+                    base < ram or base - ram + length > size - 768 * 1024 * 1024):
+                p.error('External root must follow the kernel inside RAM, leaving at least 768 MiB free')
+            adt_offset, adt_size = struct.unpack_from('<2Q', blob, 0x20)
+            updated = mkpayload.add_ramdisk_to_adt(blob[adt_offset:adt_offset + adt_size], base, length)
+            mutable = bytearray(blob[:adt_offset])
+            mutable += updated
+            mutable += b'\0' * (-len(mutable) & 15)
+            struct.pack_into('<Q', mutable, 0x28, len(updated))
+            struct.pack_into('<Q', mutable, 0x30, virt_base + base - ram + length)
+            blob = bytes(mutable)
+            info['external_ramdisk'] = {'base': base, 'size': length}
+            kernel_info['kernel_end'] = hex(virt_base + base - ram + length)
+            kernel_info['ramdisk'] = [hex(base), hex(length)]
         payload.write_bytes(blob)
         info.update(kind='xnu-ram-root', kernel=kernel_info,
                     kernel_sha256=hashlib.sha256(a.kernel.read_bytes()).hexdigest())

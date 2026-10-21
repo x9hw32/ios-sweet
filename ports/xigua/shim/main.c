@@ -112,7 +112,7 @@ static void copy(uint64_t destination, const void *source, uint64_t size)
 
 void shim_main(uint64_t fdt)
 {
-    print("XIGUA native shim / TEST 02");
+    print(DIAGNOSTIC ? "XIGUA native shim / TEST 02" : "XIGUA / OnePlus Ace 2 Pro / XNU");
     value("Image", (uintptr_t)_head);
     value("FDT", fdt);
     value("MPIDR", REGISTER(MPIDR_EL1));

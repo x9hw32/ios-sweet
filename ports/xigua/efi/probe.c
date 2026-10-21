@@ -6,6 +6,8 @@
 #include <Protocol/GraphicsOutput.h>
 #include <Protocol/LoadedImage.h>
 #include <Protocol/SimpleFileSystem.h>
+#include <Protocol/BlockIo.h>
+#include <Protocol/PartitionInfo.h>
 
 static EFI_GUID loaded_guid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
 static EFI_GUID fs_guid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
@@ -48,6 +50,87 @@ static VOID display(CONST CHAR8 *s)
 
 #define REGISTER(name) ({ UINT64 r; __asm__ volatile("mrs %0, " #name : "=r"(r)); r; })
 
+static int name_is(CONST CHAR16 *name, CONST CHAR16 *wanted)
+{
+    for (UINTN i = 0; i < 36; i++) {
+        if (name[i] != wanted[i]) return 0;
+        if (!wanted[i]) return 1;
+    }
+    return 0;
+}
+
+static VOID storage_probe(EFI_BOOT_SERVICES *bs)
+{
+    EFI_GUID block_guid = EFI_BLOCK_IO_PROTOCOL_GUID;
+    EFI_GUID part_guid = EFI_PARTITION_INFO_PROTOCOL_GUID;
+    EFI_HANDLE *handles = NULL;
+    UINTN count = 0;
+    EFI_STATUS status = bs->LocateHandleBuffer(ByProtocol, &block_guid, NULL, &count, &handles);
+    field("block_io_enumeration_status", status);
+    if (EFI_ERROR(status)) return;
+    field("block_io_handle_count", count);
+    for (UINTN i = 0; i < count; i++) {
+        EFI_PARTITION_INFO_PROTOCOL *part = NULL;
+        EFI_BLOCK_IO_PROTOCOL *block = NULL;
+        if (EFI_ERROR(bs->HandleProtocol(handles[i], &part_guid, (VOID **)&part)) ||
+            part->Type != PARTITION_TYPE_GPT) continue;
+        if (!name_is(part->Info.Gpt.PartitionName, L"esp") &&
+            !name_is(part->Info.Gpt.PartitionName, L"installer") &&
+            !name_is(part->Info.Gpt.PartitionName, L"linux")) continue;
+        add("partition ");
+        for (UINTN j = 0; j < 36 && part->Info.Gpt.PartitionName[j]; j++) {
+            CHAR8 c[2] = {(CHAR8)part->Info.Gpt.PartitionName[j], 0}; add(c);
+        }
+        add("\r\n");
+        status = bs->HandleProtocol(handles[i], &block_guid, (VOID **)&block);
+        field("partition_block_io_status", status);
+        if (EFI_ERROR(status) || !block->Media) continue;
+        field("partition_block_size", block->Media->BlockSize);
+        field("partition_last_block", block->Media->LastBlock);
+        field("partition_logical", block->Media->LogicalPartition);
+        field("partition_read_only", block->Media->ReadOnly);
+        // Only read one block. This probe never writes to Block I/O.
+        EFI_PHYSICAL_ADDRESS buffer = 0;
+        UINTN bytes = block->Media->BlockSize;
+        if (bytes < 512 || bytes > 65536 || block->Media->IoAlign > 4096) continue;
+        status = bs->AllocatePages(AllocateAnyPages, EfiLoaderData, (bytes + 4095) / 4096, &buffer);
+        if (EFI_ERROR(status)) continue;
+        status = block->ReadBlocks(block, block->Media->MediaId, 0, bytes, (VOID *)(UINTN)buffer);
+        field("partition_read_status", status);
+        if (!EFI_ERROR(status)) {
+            CONST UINT8 *b = (VOID *)(UINTN)buffer;
+            UINT64 first = 0;
+            for (UINTN j = 0; j < 8; j++) first = (first << 8) | b[j];
+            field("partition_first_eight_bytes", first);
+        }
+        bs->FreePages(buffer, (bytes + 4095) / 4096);
+    }
+    bs->FreePool(handles);
+}
+
+static VOID large_ram_probe(EFI_BOOT_SERVICES *bs)
+{
+    // The previous phone report described this full 13 GiB range as conventional.
+    // AllocateAddress must reserve all of it before any page is touched.
+    EFI_PHYSICAL_ADDRESS base = 0x8c0000000ULL;
+    UINTN bytes = 0x340000000ULL;
+    EFI_STATUS status = bs->AllocatePages(AllocateAddress, EfiLoaderData, bytes / 4096, &base);
+    field("large_ram_allocate_status", status);
+    if (EFI_ERROR(status)) return;
+    field("large_ram_base", base); field("large_ram_size", bytes);
+    UINTN offsets[] = {0, bytes / 2, bytes - 16384};
+    int passed = 1;
+    for (UINTN n = 0; n < 3; n++) {
+        volatile UINT64 *page = (VOID *)(UINTN)(base + offsets[n]);
+        for (UINTN i = 0; i < 16384 / 8; i++) page[i] = 0x5849475541000000ULL ^ offsets[n] ^ i;
+        __asm__ volatile("dsb sy" ::: "memory");
+        for (UINTN i = 0; i < 16384 / 8; i++)
+            if (page[i] != (0x5849475541000000ULL ^ offsets[n] ^ i)) passed = 0;
+    }
+    field("large_ram_sample_pages_passed", passed);
+    bs->FreePages(base, bytes / 4096);
+}
+
 EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *table)
 {
     EFI_STATUS status;
@@ -64,7 +147,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *table)
     CONST CHAR16 digits[] = L"0123456789abcdef";
     system_table = table;
     display("XIGUA hardware probe (no ExitBootServices)\r\n");
-    add("XIGUA-PROBE version=1\r\n");
+    add("XIGUA-PROBE version=2\r\n");
     field("current_el", REGISTER(CurrentEL) >> 2);
     if ((REGISTER(CurrentEL) >> 2) < 1) return EFI_UNSUPPORTED;
     field("midr_el1", REGISTER(MIDR_EL1));
@@ -105,6 +188,8 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE image, EFI_SYSTEM_TABLE *table)
         }
     }
     if (map) bs->FreePool(map);
+    storage_probe(bs);
+    large_ram_probe(bs);
     // An independent file avoids truncating or changing any existing boot files.
     status = bs->GetNextMonotonicCount(&count);
     if (EFI_ERROR(status)) return status;

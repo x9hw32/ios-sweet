@@ -1,3 +1,18 @@
+## XIGUA UEFI RAM-root progress — 2026-10-21
+
+New kernel dded2cb built successfully in CI 39637551537; CRC/SHA verified locally.
+Native XIGUA PID 1 and UEFI->native->XNU PID 1 both pass QEMU. Separate root GPT
+partition with 4 KiB sectors is read and CRC checked by UEFI; PID 1 passes too.
+Hardware UEFI native attempt reached XNU logs per user; user manually rebooted.
+Original ESP was restored again and verified. Phone is in recovery.
+User wants actual iOS next, no more small diagnostic hardware boots before it.
+Apple iPhone X IPSW downloading via aria2; prepare_ios_root.py --wait-download
+will automatically build a 12 GiB HFS+ root after it completes. Root target is
+user-allocated linux, not userdata. See ports/xigua/STATUS.md for exact paths.
+22 host tests pass. New kernel + 13 GiB reserved RAM (12 GiB gap before HFS+ root)
+boots PID 1 in QEMU, no panic, unknown glyphs=0. EFI storage reads now use a
+low (<4 GiB) bounce buffer then CPU-copy/check the high-RAM destination.
+
 ## XIGUA fork handoff — 2026-10-21
 
 CI 39631591118 succeeded (7c704f2). SHA-256 verified kernel.development.xigua.

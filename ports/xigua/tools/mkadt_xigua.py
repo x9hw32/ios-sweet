@@ -43,7 +43,8 @@ def make(profile):
                                profile['gicr_size']))
     put(gic, 'virtual-timer-intid', struct.pack('<I', profile['virtual_timer_intid']))
     # GUI/display service is a later milestone; no UFS node or hardware driver startup.
-    io.children = [n for n in io.children if n.name != 'disp0']
+    if not profile.get('gui'):
+        io.children = [n for n in io.children if n.name != 'disp0']
     fb = profile['framebuffer']
     console = next(n for n in root.children if n.name == 'sweet-fbcon')
     put(console, 'reg', struct.pack('<2Q', fb['base'], fb['size']))

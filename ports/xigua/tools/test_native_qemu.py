@@ -43,6 +43,9 @@ def main():
     p.add_argument('--secs', type=int, default=5)
     p.add_argument('--kernel', type=Path)
     p.add_argument('--payload', type=Path)
+    p.add_argument('--efi-esp', type=Path, help='Boot this FAT image through EDK2 instead of -kernel')
+    p.add_argument('--root-disk', type=Path, help='Additional GPT disk with 4 KiB logical sectors')
+    p.add_argument('--memory', default='4G', help='QEMU guest RAM (default 4G)')
     a = p.parse_args()
     if a.kernel and not a.payload:
         p.error('--kernel requires --payload for font lookup')
@@ -50,10 +53,19 @@ def main():
     out.mkdir(parents=True, exist_ok=False)
     mon = out / 'qmp.sock'
     cmd = ['qemu-system-aarch64', '-M', 'virt,gic-version=3', '-cpu', 'cortex-a76',
-           '-smp', '1', '-m', '4G', '-display', 'none', '-monitor', 'none',
+           '-smp', '1', '-m', a.memory, '-display', 'none', '-monitor', 'none',
            '-serial', 'file:' + str(out / 'serial.txt'),
            '-qmp', 'unix:' + str(mon) + ',server,nowait', '-no-reboot',
-           '-kernel', str(a.image.resolve()), '-d', 'guest_errors', '-D', str(out / 'qemu.log')]
+           '-d', 'guest_errors', '-D', str(out / 'qemu.log')]
+    if a.efi_esp:
+        cmd += ['-bios', '/usr/share/edk2-ovmf/aarch64/QEMU_EFI.fd',
+                '-drive', f'if=none,id=esp,format=raw,file={a.efi_esp.resolve()},snapshot=on',
+                '-device', 'virtio-blk-pci,drive=esp']
+    else:
+        cmd += ['-kernel', str(a.image.resolve())]
+    if a.root_disk:
+        cmd += ['-drive', f'if=none,id=root,format=raw,file={a.root_disk.resolve()},snapshot=on',
+                '-device', 'virtio-blk-pci,drive=root,logical_block_size=4096,physical_block_size=4096']
     with (out / 'stderr.txt').open('wb') as error:
         process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=error)
         try:

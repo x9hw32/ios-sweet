@@ -7,8 +7,9 @@ from inspect_dtb import summarize
 
 
 def parse_probe(text):
-    if not text.startswith('XIGUA-PROBE version=1'):
-        raise ValueError('Not an XIGUA probe v1 report')
+    lines = text.splitlines()
+    if not lines or lines[0] not in ('XIGUA-PROBE version=1', 'XIGUA-PROBE version=2'):
+        raise ValueError('Not an XIGUA probe v1/v2 report')
     values = {}
     memory = []
     for line in text.splitlines():
@@ -28,7 +29,32 @@ def parse_probe(text):
     return values, memory
 
 
-def make_profile(dtb, report):
+def large_ram_range(values, memory, banks, fixed):
+    def covered(base, end, ranges):
+        cursor = base
+        for lo, hi in sorted(ranges):
+            if lo > cursor:
+                break
+            if hi > cursor:
+                cursor = hi
+            if cursor >= end:
+                return True
+        return False
+    base, size = values.get('large_ram_base', 0), values.get('large_ram_size', 0)
+    end = base + size
+    if (values.get('large_ram_allocate_status') != 0 or
+            values.get('large_ram_sample_pages_passed') != 1 or
+            base < 1 << 32 or base % 0x2000000 or size < 1 << 30 or
+            size % 0x4000 or end > 1 << 36 or
+            not covered(base, end, banks) or
+            not covered(base, end, [(lo, lo+n) for kind, lo, n, attr in memory
+                                    if kind == 7 and not attr & (1 << 63)]) or
+            any(base < hi and lo < end for lo, hi in fixed)):
+        raise ValueError('Large RAM range must be reserved/tested by UEFI and covered by DT/free memory')
+    return base, size
+
+
+def make_profile(dtb, report, large_ram=False):
     board = summarize(dtb)
     values, memory = parse_probe(report)
     if values.get('gop_status') != 0 or values.get('gop_pixel_format') not in (0, 1):
@@ -55,6 +81,9 @@ def make_profile(dtb, report):
     if not candidates:
         raise ValueError('No 512 MiB high-RAM candidate shared by DT and UEFI free memory')
     ram, length = min(candidates)
+    if large_ram:
+        ram, length = large_ram_range(values, memory,
+            [(int(b['base'], 16), int(b['end'], 16)) for b in board['memory']], fixed)
     gic = board['devices']['gic']['reg']
     return {'model': 'PJA110', 'kind': 'phone', 'dtb_sha256': board['dtb_sha256'],
             'boot_mpidr': values['mpidr_el1'] & 0xffffff, 'timebase': values['cntfrq_el0'],
@@ -62,7 +91,8 @@ def make_profile(dtb, report):
             'gicd': int(gic[0]['base'], 16), 'gicd_size': int(gic[0]['size'], 16),
             'gicr': int(gic[1]['base'], 16), 'gicr_size': int(gic[1]['size'], 16),
             'ram_base': ram, 'ram_size': length,
-            'ram_status': 'candidate: live DT intersected with UEFI conventional memory',
+            'ram_status': ('UEFI reserved range; three pages sampled; large XNU mapping unverified'
+                           if large_ram else 'candidate: live DT intersected with UEFI conventional memory'),
             'framebuffer': {'base': base, 'size': size, 'width': width, 'height': height,
                             'stride': pitch * 4, 'rgb': values['gop_pixel_format'] == 0,
                             'source': 'Mu UEFI GOP', 'abl_scanout_verified': False},
@@ -86,6 +116,7 @@ def main():
     p.add_argument('--dtb', type=Path)
     p.add_argument('--probe', type=Path)
     p.add_argument('--qemu', action='store_true')
+    p.add_argument('--large-ram', action='store_true', help='Use the range explicitly allocated by EFI probe v2')
     p.add_argument('--output', required=True, type=Path)
     a = p.parse_args()
     if a.qemu:
@@ -93,7 +124,7 @@ def main():
     else:
         if not a.dtb or not a.probe:
             p.error('--dtb and --probe required for a phone profile')
-        profile = make_profile(a.dtb.read_bytes(), a.probe.read_text())
+        profile = make_profile(a.dtb.read_bytes(), a.probe.read_text(), a.large_ram)
     a.output.parent.mkdir(parents=True, exist_ok=True)
     with a.output.open('x') as out:
         json.dump(profile, out, indent=2)
