@@ -13,9 +13,11 @@
 - Телефон перезагружен из recovery в fastboot и временно загружен
   Mu-xigua-0.img. Fastboot Sending/Booting OKAY: diagnostics/ios-boot-1.txt.
   Пользователь подтвердил счётчик загрузки iOS по 1 GiB в RAM: UEFI читает root.
-  Полное копирование, вход в XNU и GUI на этой попытке ещё не подтверждены.
+  Затем пользователь сообщил: «яблочко эпл появилось». Логотип подтверждён
+  наблюдением; рабочий стол, экран блокировки и аппаратные логи launchd пока нет.
   Это первая аппаратная попытка с настоящим root iOS. Ждём экран пользователя:
-  root copy progress / XNU / launchd / GUI / error. Никаких подтверждений GUI пока.
+  Есть ли полоса под логотипом, движется ли она, появился ли интерфейс.
+  Асинхронный вопрос задан; телефон не перезагружать.
 - Не перезагружать телефон и не восстанавливать ESP, пока пользователь сообщает
   наблюдения. Boot_a/boot_b не прошивались. Автозагрузка из boot ещё не сделана.
 - Исходники предыдущего исправления: 12e0ac2. После успешного аппаратного GUI
@@ -162,3 +164,16 @@ recovery; монтировать разделы через BusyBox. Не про�
   result.json: no_panic_observed; это НЕ доказательство GUI. Полный console
   build/qemu-ios-live-7: Apple launchd, exec SpringBoard; GUI не подтверждён.
 - Остаточные APFS FUSE mounts /tmp/tmp.qdasOfBpop/* размонтированы.
+
+## После появления Apple logo
+
+- Пользователь подтвердил логотип Apple на телефоне после загрузки root в RAM.
+  Не выдавать логотип за успешный рабочий стол. Ждём полосу/дальнейший экран.
+- В доноре NOTES.md описан Apple logo + progress bar, отрисованный backboardd
+  во время DataMigration; там подготовка заняла около часа. Наш root уже имеет
+  migration skip preferences, поэтому нельзя считать это той же причиной без
+  наблюдения полосы или логов.
+- Независимый QEMU повтор с настоящим root запущен на 1200 s без пауз:
+  build/qemu-ios-3, backing build/qemu-ios-memory-3.bin, native out/qemu-ios-2,
+  kernel CI39646487365, tool session 48157. IO priority idle; телефон не трогаем.
+  Первый capture: build/qemu-ios-live-8, дошёл до HFS initialization.

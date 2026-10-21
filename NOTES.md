@@ -1,3 +1,14 @@
+## XIGUA Apple logo observed on hardware — 2026-10-21
+
+User reports Apple logo after the iOS RAM-root copy. This is a screen
+observation, NOT proof of SpringBoard desktop/lock screen. Asked whether a
+progress bar exists or advances. Do not reboot/restore ESP while observing.
+Donor had logo+bar drawn by backboardd during DataMigration (~60 min); our
+root already has migration skip prefs, so do not assume same cause.
+Independent real-root QEMU runs unpaused for 1200 s: build/qemu-ios-3,
+backing build/qemu-ios-memory-3.bin, native out/qemu-ios-2, CI39646487365.
+First capture build/qemu-ios-live-8 reached HFS initialization. See STATUS.
+
 ## XIGUA first real iOS hardware attempt — 2026-10-21
 
 12 GiB iOS 20H392 HFS+ root WRITTEN to user-allocated linux, full readback
