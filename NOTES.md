@@ -1,10 +1,25 @@
+## XIGUA Apple launchd milestone — 2026-10-21
+
+Kernel CI 39646487365 SUCCESS (1d5c416), artifact CRC/SHA verified. Real 12 GiB
+root mounted in QEMU; exec launchd, Early boot complete, then exec SpringBoard.
+No GUI observed yet. build/qemu-ios-live-6 has full console and screenshot.
+QEMU build/qemu-ios-2 paused via QMP to prioritize HDD sequential reads;
+send cont before continuing. Native phone image out/phone-ios-ram-2 ready;
+ESP out/efi-ios-ram-2 still building. NEVER use old efi-ios-ram-1.
+Root installer attempt 1 stopped before writing: exec-out merged dd stderr
+into metadata. Fixed with shell protocol v2, exact 1 MiB verified on device.
+Attempt 2 running (diagnostics/ios-root-install-2.log), checking root hash first.
+Phone recovery. No actual iOS hardware boot yet; boot partitions untouched.
+
 ## XIGUA real iOS root / large memdev fix — 2026-10-21
 
 Full Apple 20H392 IPSW downloaded; 12 GiB HFS+ root built, essential files
-checked, final fsck OK, 413 MiB free. Final receipt hashes still running.
+checked, final fsck OK, 413 MiB free. root.json hashes complete. Installer is
+checking the root before the linux write; see diagnostics/ios-root-install-1.log.
 Real-root QEMU reached md0 but failed HFS mount (EINVAL): memdev shifts its
 uint32_t page count before widening, so 12 GiB wraps to zero. Patch 0082 now
-promotes mdSize before shifting and caps raw IO count to INT_MAX. Build and
+promotes mdSize before shifting and caps raw IO count to INT_MAX. Commit
+1d5c416; kernel CI 39646487365 in progress; 22 host checks pass. Build and
 verify this kernel against the real root before the next hardware attempt.
 Phone remains recovery; linux not written yet. Existing efi-ios-ram-1 uses
 old kernel: DO NOT install it. Build fresh native Image/ESP after new CI.

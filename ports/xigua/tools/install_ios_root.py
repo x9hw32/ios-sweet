@@ -24,7 +24,9 @@ def sha(path):
 
 
 def command(text, *, output=None):
-    return subprocess.run(['adb', 'exec-out', 'sh -c ' + shlex.quote(text)],
+    # Shell protocol v2 keeps remote stderr separate from binary stdout.
+    # exec-out merges dd's statistics into raw partition backup bytes.
+    return subprocess.run(['adb', 'shell', '-T', 'sh -c ' + shlex.quote(text)],
                           stdout=output or subprocess.PIPE, stderr=subprocess.PIPE,
                           timeout=600, check=True).stdout
 

@@ -96,15 +96,34 @@ recovery; монтировать разделы через BusyBox. Не про�
 
 - 12 GiB HFS+ root собран из полного Apple IPSW (20H392); launchd, dyld,
   shared cache проверены, root tweaks применены. Финальный fsck -f -n: OK.
-  Свободно 413 MiB. tools/prepare_ios_root.py ещё считает SHA-256 для root.json.
+  Свободно 413 MiB. root.json готов; SHA-256 всех входов и root рассчитаны.
 - Реальный root запущен в file-backed QEMU: build/qemu-ios-1/.
   build/qemu-ios-live-2/console.txt: md0 зарегистрирован с размером 12 GiB,
   но hfs_mountfs отказал (EINVAL), поэтому launchd ещё не запущен.
 - Найдена причина: bsd/dev/memdev.c сдвигает uint32_t mdSize на 12 бит до
   расширения; 12 GiB превращаются в ноль. Исправляется продвижением в uint64_t
   до сдвига в strategy/ioctl/raw IO; raw IO также ограничивает count до INT_MAX.
-  Патч 0082 обновлён. Нужны CI-сборка и повторная QEMU-проверка полного root.
+  Патч 0082 обновлён (1d5c416). CI 39646487365 собирается; 22 host checks OK.
+  Нужна повторная QEMU-проверка полного root новым ядром.
 - out/efi-ios-ram-1 строится со старым ядром; НЕ устанавливать его на телефон.
   После нового ядра пересобрать native Image и ESP в новых каталогах.
-- Телефон остаётся в recovery, linux ещё не записан. Следующий аппаратный boot
+- Телефон остаётся в recovery. Установщик root запущен, сначала проверяет хеши
+  backups и самого образа; diagnostics/ios-root-install-1.log. Следующий аппаратный boot
   должен использовать настоящий root, после исправления выявленной ошибки.
+
+## Новое ядро и Apple launchd
+
+- CI 39646487365 SUCCESS, commit 1d5c416, kernel SHA-256
+  6cd000a67efa88fce45cc658c79daa1434ac40973397baeef569b6828b43abb3.
+- out/phone-ios-ram-2 и out/qemu-ios-2 используют исправленное ядро.
+  out/efi-ios-ram-2 собирается с полным root и новым native Image.
+- Реальный root в QEMU: HFS+ смонтирован; exec launchd; Early boot complete;
+  exec SpringBoard (build/qemu-ios-live-6/console.txt). GUI ещё не подтверждён.
+  QEMU временно остановлен через QMP после capture, чтобы ускорить проверки
+  на HDD. Перед продолжением отправить QMP cont; тест завершится через 600 s
+  от запуска (build/qemu-ios-2, backing build/qemu-ios-memory-2.bin).
+- Первый root installer остановился ДО записи: adb exec-out смешал dd stderr
+  со stdout в metadata backup. Исправлено на shell -T (protocol v2).
+  Проверено на телефоне: бинарная копия ровно 1048576 байт. 22 tests OK.
+- Повторный installer: diagnostics/ios-root-install-2.log и каталог -2.
+  Пока считает root SHA; ESP/boot всё ещё не менялись.
