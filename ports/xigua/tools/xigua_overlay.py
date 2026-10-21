@@ -3,6 +3,7 @@
 import argparse
 import difflib
 from pathlib import Path
+import re
 
 
 def overlay(source):
@@ -12,7 +13,7 @@ def overlay(source):
     def read(name):
         if name not in originals:
             path = source / name
-            originals[name] = path.read_text() if path.exists() else ''
+            originals[name] = path.read_text(errors='surrogateescape') if path.exists() else ''
             modified[name] = originals[name]
         return modified[name]
 
@@ -50,7 +51,18 @@ def overlay(source):
 #define SWEET_SMP_MAX_CPUS 1
 #endif
 ''')
-    replace('pexpert/pexpert/arm64/Makefile', '\tSWEET.h\n', '\tSWEET.h \\\n+\tXIGUA.h\n'.replace('+\t', '\t'))
+    replace('pexpert/pexpert/arm64/Makefile', '\tSWEET.h\n',
+            '\tSWEET.h \\\n\tXIGUA.h \\\n\tboard_name.h\n')
+    create('pexpert/pexpert/arm64/board_name.h', '''/* Runtime diagnostics use the selected board's name. */
+#ifndef _PEXPERT_ARM64_BOARD_NAME_H
+#define _PEXPERT_ARM64_BOARD_NAME_H
+#if defined(ARM64_BOARD_CONFIG_XIGUA)
+#define ARM_BOARD_NAME "XIGUA"
+#else
+#define ARM_BOARD_NAME "SWEET"
+#endif
+#endif
+''')
     replace('pexpert/pexpert/arm64/board_config.h', '#include <pexpert/arm64/SWEET.h>',
             '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n#include <pexpert/arm64/XIGUA.h>\n#else\n#include <pexpert/arm64/SWEET.h>\n#endif')
 
@@ -94,6 +106,40 @@ void sweet_early_disable(void) {}
         replace(table, line, '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n' + line.replace(old, new) +
                 '#else\n' + line + '#endif\n')
 
+    # The larger XIGUA panel can center the iPhone X canvas without cropping.
+    # Keep iOS's known 1125x2436 layout rather than an unknown 1240x2772 class.
+    replace('iokit/Kernel/arm/SweetFramebuffer.cpp',
+            '\tif (!native && fWidth <= SWEET_FB_LOGICAL_W && fHeight <= SWEET_FB_LOGICAL_H) {',
+            '''#if defined(ARM64_BOARD_CONFIG_XIGUA)
+\tif (!native) {
+#else
+\tif (!native && fWidth <= SWEET_FB_LOGICAL_W && fHeight <= SWEET_FB_LOGICAL_H) {
+#endif''')
+
+    # Change printed prefixes only. Driver symbols, boot arguments, protocol
+    # names and stored log formats retain their existing interfaces.
+    prefix = re.compile(r'"SWEET(?=[ :])')
+    for directory in ['bsd', 'osfmk', 'pexpert', 'iokit', 'libkern']:
+        for path in sorted((source / directory).rglob('*')):
+            if path.suffix not in ['.c', '.cpp']:
+                continue
+            name = str(path.relative_to(source))
+            text = modified.get(name)
+            if text is None:
+                raw = path.read_bytes()
+                if b'"SWEET ' not in raw and b'"SWEET:' not in raw:
+                    continue
+                text = raw.decode('utf-8', errors='surrogateescape')
+            if not prefix.search(text):
+                continue
+            read(name)
+            updated = prefix.sub('ARM_BOARD_NAME "', text)
+            first_include = re.search(r'^#include\b', updated, re.MULTILINE)
+            if not first_include:
+                raise ValueError(f'{name}: no include location for board name')
+            pos = first_include.start()
+            modified[name] = updated[:pos] + '#include <pexpert/arm64/board_name.h>\n' + updated[pos:]
+
     patch = ''
     for name in sorted(modified):
         if originals[name] == modified[name]:
@@ -111,7 +157,7 @@ def main():
     a = p.parse_args()
     patch = overlay(a.source)
     a.output.parent.mkdir(parents=True, exist_ok=True)
-    a.output.write_text(patch)
+    a.output.write_text(patch, errors='surrogateescape')
     print(f'{a.output}: {len(patch)} bytes')
 
 

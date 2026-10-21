@@ -11,9 +11,16 @@ restored bytewise via BusyBox dd in recovery and hash verified. Fastboot unlocke
 Native TEST 02 temporarily booted successfully; user confirmed its title and
 RAM 16 KiB READ/WRITE PASSED. This verifies one page at 0x881000000 and ABL screen
 output, not all 512 MiB of candidate RAM. It reset to Android automatically.
-First native XIGUA XNU + static RAM-root image sent using fastboot boot:
-Sending/Booting OKAY; screen observation pending. No confirmed hardware XNU
-execution or iOS root yet. Host checks 39634141927 and 39634141289 passed.
+HARDWARE MILESTONE: user confirmed init running as PID 1 and repeated heartbeat
+on native XIGUA XNU + static RAM-root (kernel CI 39631591118). No Apple launchd/GUI yet.
+EFI probe v2 additionally allocated all 13 GiB at [0x8c0000000,0xc00000000),
+verified three sample pages, and read blocks from esp/installer/linux. Original
+ESP restored and hash verified via BusyBox dd in recovery.
+Next: validate UEFI native loader (ExitBootServices + cache/MMU handoff) in QEMU,
+then hardware; build a 12 GiB HFS+ iOS root in the user-allocated linux partition
+and read it into RAM via UEFI. Downloading Apple iPhone X 20H392 IPSW.
+Patch 0082 now uses XIGUA runtime prefixes and presents an iPhone X canvas
+on the physically larger panel. Requires a new CI kernel before GUI testing. Host checks 39634141927 and 39634141289 passed.
 Port-specific handoff: ports/xigua/STATUS.md. No device data/Apple firmware in git.
 
 
