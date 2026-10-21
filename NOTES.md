@@ -1,5 +1,10 @@
 ## XIGUA fork handoff — 2026-10-21
 
+CI 39629480987 reached compilation but failed in HFS/BearSSL: donor per-file
+include/compat flags in bsd/libkern Makefile.template were SWEET-only. Extend both
+Makefile guards to XIGUA. Other XIGUA source objects compiled in that run.
+
+
 CI 39626328183 stopped before compilation: blacktop's unnumbered TrustCache.patch
 adds headers already shipped by xnu-8796.141.3. Port patches 0001–0082 all applied.
 Keep strict application for numbered port patches; retain upstream's optional
