@@ -8,8 +8,12 @@ Source/tools are under ports/xigua with a separate Linux host-check workflow.
 Hardware: temporary Mu-xigua-0.img ran our EFI probe, saved a report and reset.
 EL1, TGran16=1, CNTFRQ=19.2MHz, GOP b8000000 1240x2772 stride4960. Original ESP
 restored bytewise via BusyBox dd in recovery and hash verified. Fastboot unlocked=yes.
-Native diagnostic v4 image sent via fastboot boot; automatic return to Android
-observed, screen result pending user. No hardware XNU boot or iOS root yet.
+Native TEST 02 temporarily booted successfully; user confirmed its title and
+RAM 16 KiB READ/WRITE PASSED. This verifies one page at 0x881000000 and ABL screen
+output, not all 512 MiB of candidate RAM. It reset to Android automatically.
+First native XIGUA XNU + static RAM-root image sent using fastboot boot:
+Sending/Booting OKAY; screen observation pending. No confirmed hardware XNU
+execution or iOS root yet. Host checks 39634141927 and 39634141289 passed.
 Port-specific handoff: ports/xigua/STATUS.md. No device data/Apple firmware in git.
 
 

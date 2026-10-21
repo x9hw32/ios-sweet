@@ -162,10 +162,17 @@
     "end": "0xbab00000"
   },
   "kernel_ram_selected": null,
-  "abl_framebuffer_verified": false,
+  "abl_framebuffer_verified": true,
   "known_working_uefi": {
     "file": "Mu-xigua-0.img",
     "status": "reported working by user",
     "sha256": "193db5377413eccbd3e9359b0afe2aebdb67e8155e9eb0609e0a67c5476f73f7"
+  },
+  "native_diagnostic": {
+    "test": "TEST 02",
+    "screen_confirmed_by_user": true,
+    "ram_probe_base": "0x881000000",
+    "ram_probe_bytes": 16384,
+    "ram_probe_passed": true
   }
 }

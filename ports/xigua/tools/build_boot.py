@@ -62,7 +62,8 @@ def main():
     constants = {'FB_BASE': fb['base'], 'FB_SIZE': fb['size'], 'FB_WIDTH': fb['width'],
                  'FB_HEIGHT': fb['height'], 'FB_STRIDE': fb['stride'],
                  'RAM_BASE': ram, 'RAM_SIZE': size, 'BOOT_MPIDR': profile['boot_mpidr'],
-                 'TIMEBASE': profile['timebase']}
+                 'TIMEBASE': profile['timebase'], 'DIAGNOSTIC': 0 if a.kernel else 1,
+                 'REBOOT_SECONDS': 20 if a.kernel else 45}
     (out / 'board.h').write_text(''.join(f'#define {k} {v:#x}ULL\n' for k, v in constants.items()))
     cc = 'aarch64-linux-gnu-gcc'
     flags = ['-Os', '-ffreestanding', '-nostdlib', '-fno-pic', '-fno-stack-protector',

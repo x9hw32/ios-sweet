@@ -53,9 +53,9 @@ static void value(const char *name, uint64_t v)
 
 static void reboot(void)
 {
-    print("Cold reboot to normal boot in 20 seconds");
+    print("Diagnostic complete; automatic cold reboot follows");
     uint64_t frequency = REGISTER(CNTFRQ_EL0), start = REGISTER(CNTPCT_EL0);
-    while (REGISTER(CNTPCT_EL0) - start < frequency * 20) __asm__ volatile("yield");
+    while (REGISTER(CNTPCT_EL0) - start < frequency * REBOOT_SECONDS) __asm__ volatile("yield");
     register uint64_t x0 __asm__("x0") = 0x84000009;
     __asm__ volatile("smc #0" : "+r"(x0) : : "x1", "x2", "x3", "x4", "x5", "x6", "x7",
                      "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "cc", "memory");
@@ -112,7 +112,7 @@ static void copy(uint64_t destination, const void *source, uint64_t size)
 
 void shim_main(uint64_t fdt)
 {
-    print("XIGUA native shim: experimental ABL framebuffer");
+    print("XIGUA native shim / TEST 02");
     value("Image", (uintptr_t)_head);
     value("FDT", fdt);
     value("MPIDR", REGISTER(MPIDR_EL1));
@@ -139,6 +139,28 @@ void shim_main(uint64_t fdt)
         {(uintptr_t)_head, (uintptr_t)_end - (uintptr_t)_head},
         {fdt, fdt_size}, {FB_BASE, FB_SIZE},
     };
+    if (DIAGNOSTIC) {
+        for (unsigned i = 0; i < sizeof(reserved) / sizeof(reserved[0]); i++) {
+            if (reserved[i].base < RAM_BASE + RAM_SIZE &&
+                RAM_BASE < reserved[i].base + reserved[i].size) {
+                print("RAM overlaps live loader/FDT/framebuffer; stopping");
+                reboot();
+            }
+        }
+        volatile uint64_t *probe = (void *)(uintptr_t)(RAM_BASE + 0x1000000);
+        value("RAM probe PA", (uintptr_t)probe);
+        for (unsigned i = 0; i < XIGUA_PAGE / sizeof(*probe); i++)
+            probe[i] = 0x5849475541000000ull ^ i;
+        __asm__ volatile("dsb sy" ::: "memory");
+        for (unsigned i = 0; i < XIGUA_PAGE / sizeof(*probe); i++)
+            if (probe[i] != (0x5849475541000000ull ^ i)) {
+                print("RAM READ/WRITE FAILED");
+                reboot();
+            }
+        print("RAM 16 KiB READ/WRITE PASSED");
+        print("No XNU in this diagnostic; empty payload error is expected");
+        print("Screen remains here for 45 seconds");
+    }
     struct placement place;
     const struct payload *p = (void *)_payload_start;
     int error = payload_validate(p, _payload_end - _payload_start,

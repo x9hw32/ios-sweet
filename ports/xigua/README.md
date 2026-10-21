@@ -12,9 +12,9 @@
   Эти три раздела пользователь выделил под порт.
 - GICD: 0x17100000/0x10000; GICR: 0x17180000/0x200000; virtual timer: INTID 27.
 - Основная RAM выше 32 ГиБ физического адресного пространства. Область XNU ещё
-  не проверена загрузкой. Touch — Synaptics TCM HBP через SPI 0xa90000.
+  полностью не проверена; native diagnostic проверил одну страницу 16 КиБ. Touch — Synaptics TCM HBP через SPI 0xa90000.
 - Пользователь проверял Mu-xigua-0.img. Android сообщает locked/green при root и
-  кастомном ядре; реальный unlock ещё проверить в fastboot.
+  кастомном ядре; fastboot подтвердил unlocked=yes.
 
 **Условие пользователя:** ESP записывать готовым образом через dd в recovery.
 Монтирование разделов — через BusyBox. Утилита ESP требует recovery и /sbin/busybox.
@@ -28,7 +28,8 @@
   обращения к framebuffer Redmi, его UFS/input/USB/дисковым логам и реальному PMIC.
 - EFI-проба снимает CPU, UEFI memory map и GOP в xigua-probe-*.txt на ESP, затем
   делает холодный reset. Boot Services остаются активны; GOP ещё не доказывает
-  обновление панели после выхода из UEFI.
+  обновление панели после выхода из UEFI. Native TEST 02 подтвердил вывод под ABL
+  и запись/чтение одной страницы RAM на реальном телефоне.
 - Native shim содержит XNU payload внутри Linux Image, проверяет все границы
   копирования и передаёт ADT/boot_args. UFS/USB/touch он не трогает.
 - EFI-проба и native shim проверены в QEMU. Донорское и наше XIGUA-ядро
@@ -72,8 +73,9 @@ python3 tools/build_boot.py --profile build/phone-profile.json \
 ```
 
 Профиль проверяет поддержку 16 КиБ, выбирает кандидат RAM по пересечению live DT
-и UEFI ConventionalMemory, исключая известные резервы. GOP под ABL ещё не проверен,
-поэтому первый образ явно экспериментальный. После рабочего вывода добавить
+и UEFI ConventionalMemory, исключая известные резервы. Профиль из новой EFI-пробы
+по умолчанию считает вывод под ABL непроверенным. TEST 02 держит экран 45 секунд
+и проверяет запись/чтение одной страницы RAM. После рабочего вывода добавить
 --kernel PATH --ramdisk PATH для RAM-root. Образ ограничен 192 МиБ.
 Финальную установку в boot_a выполнять после временных загрузок; boot_b сохранить.
 
