@@ -7,7 +7,8 @@ Apple launchd, Early boot complete, exec SpringBoard; no GUI proven.
 New ESP out/efi-ios-ram-2/esp.img installed via recovery BusyBox dd, full SHA
 verified. Original ESP is NOT currently installed; backup preserved.
 Temporary Mu-xigua-0.img boot SENT successfully from fastboot (Sending/Booting
-OKAY), diagnostics/ios-boot-1.txt. Awaiting user's actual screen observation.
+OKAY), diagnostics/ios-boot-1.txt. User confirms iOS root RAM-copy counter
+advancing by 1 GiB. Full copy / XNU / GUI on hardware still unconfirmed.
 Do not reboot or restore ESP while user is observing this attempt. No boot
 partition writes. Goal remains automatic iOS boot from boot, dual boot later.
 Full current handoff: ports/xigua/STATUS.md, including exact image/log paths.
