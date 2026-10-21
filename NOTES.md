@@ -1,3 +1,16 @@
+## XIGUA fork handoff — 2026-10-21
+
+SM8550 / PJA110 bring-up is on branch `xigua-bringup`. Patch 0082 adds XIGUA,
+plain arm64 and a one-CPU limit. Hardcoded SM7150 early framebuffer access,
+UFS initialization (including its input/USB/disk-log startup), and real PMIC
+battery polling are disabled for XIGUA. SWEET remains available as a separate
+machine config. CI now fails if a required patch cannot apply.
+
+Local patch series 0001–0082 passes git apply --check in order on Apple's
+xnu-8796.141.3. No XIGUA kernel build or hardware boot confirmed yet. Device
+backups and live DT are private in the parent workspace, excluded from git.
+No permission from the original sweet project applies to the Ace 2 Pro.
+
 # iOS 16 on sweet (Redmi Note 10 Pro, SM7150) - working notes
 
 ## Agent handoff / active work (2026-10-15, latest)
