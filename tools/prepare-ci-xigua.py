@@ -23,9 +23,15 @@ def main():
     start = text.index('        for PATCH in "${PATCH_DIR}"/*.patch; do')
     end = text.index('\n        done', start) + len('\n        done')
     text = text[:start] + '''        for PATCH in "${PATCH_DIR}"/*.patch; do
-            running "Applying required patch: ${PATCH}"
-            git apply --check "$PATCH" || exit 1
-            git apply "$PATCH" || exit 1
+            if git apply --check "$PATCH"; then
+                running "Applying patch: ${PATCH}"
+                git apply "$PATCH" || exit 1
+            elif [[ "$(basename "$PATCH")" =~ ^[0-9]{4}- ]]; then
+                error "Required port patch did not apply: ${PATCH}"
+                exit 1
+            else
+                warning "Toolchain compatibility patch already upstream or superseded: ${PATCH}"
+            fi
         done''' + text[end:]
     build.write_text(text)
 

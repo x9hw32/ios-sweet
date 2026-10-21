@@ -1,5 +1,11 @@
 ## XIGUA fork handoff — 2026-10-21
 
+CI 39626328183 stopped before compilation: blacktop's unnumbered TrustCache.patch
+adds headers already shipped by xnu-8796.141.3. Port patches 0001–0082 all applied.
+Keep strict application for numbered port patches; retain upstream's optional
+handling for its unnumbered compatibility patches. Next run tests compilation.
+
+
 SM8550 / PJA110 bring-up is on branch `xigua-bringup`. Patch 0082 adds XIGUA,
 plain arm64 and a one-CPU limit. Hardcoded SM7150 early framebuffer access,
 UFS initialization (including its input/USB/disk-log startup), and real PMIC
