@@ -1,3 +1,19 @@
+## XIGUA user reports iOS launch on hardware — 2026-10-21
+
+User sequence: Apple logo without progress bar -> black screen -> excited
+report of successful iOS launch. Exact UI (desktop/lock/Setup) and touch still
+being clarified. No photo or hardware launchd log yet. DO NOT reboot phone
+while user looks at it. Boot partitions untouched. USB/ADB not implemented.
+Automatic-boot image prepared privately at out/phone-autoboot-1/boot.img:
+exact user Mu-xigua-0.img, v4, 1.1 MiB, same successful temporary chain.
+Boot_a/b backups reverified. Cannot install without user physically returning
+the phone to fastboot; do not ask redundant authorization for original goal.
+Sampler hook idea reverted before CI; patch0082 matches known-good1d5c416.
+QEMU --private-memory avoids HDD writeback; live capture required. 22 checks OK.
+QEMU4 private run build/qemu-ios-4, session13291, capture14 backboardd lookups;
+QEMU3 intentionally stopped for host IO pressure, not a kernel failure.
+Full handoff ports/xigua/STATUS.md. RAM-root changes do not survive reboot.
+
 ## XIGUA Apple logo observed on hardware — 2026-10-21
 
 User reports Apple logo after the iOS RAM-root copy. This is a screen
