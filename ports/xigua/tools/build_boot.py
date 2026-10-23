@@ -28,6 +28,7 @@ def main():
     p.add_argument('--external-ramdisk-size', type=lambda x: int(x, 0))
     p.add_argument('--ios-userland', action='store_true', help='Enable the iOS display service and launchd boot arguments')
     p.add_argument('--touch', action='store_true', help='Enable experimental XIGUA Synaptics SPI touch input')
+    p.add_argument('--console', action='store_true', help='Keep kernel console text visible during iOS presentation')
     p.add_argument('--sample-processes', help='Comma-separated process names for persistent native-UFS stack samples')
     storage = p.add_mutually_exclusive_group()
     storage.add_argument('--ufs-probe', action='store_true', help='Read-only UFS CRC probe before a small RAM-root init')
@@ -108,7 +109,8 @@ def main():
                 p.error('XIGUA touch requires the verified phone profile')
             command += ' xiguatouch=1'
         if a.ios_userland:
-            command += ' unentitled_ios_sim_launch=1 ignition_level=1 rootrw=1 launchd_unsecure_cache=1 sweetfb_noconsole=1'
+            command += ' unentitled_ios_sim_launch=1 ignition_level=1 rootrw=1 launchd_unsecure_cache=1'
+            command += f' sweetfb_noconsole={0 if a.console else 1}'
             command += f' sweetfb_hz={a.fb_hz}'
             if a.display_mode == 'native':
                 command += ' sweetfb_native=1'

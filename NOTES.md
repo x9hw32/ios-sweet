@@ -1,3 +1,20 @@
+## Full iOS touch3 USER reports black after Apple; cause UNKNOWN — 2026-10-23
+
+User installed/booted native ios-touch3 themselves and reports black after
+Apple. ADB/fastboot not available at check; requested recovery and elapsed
+black-screen duration via async. MUST capture latest persistent log BEFORE
+next XNU boot (tools/capture_ios_black_screen.sh). No new device writes made.
+Previous successful native log had FB display off/on, so sleep without power
+keys is plausible, NOT proved. Do not call this a kernel/touch failure yet.
+Prepared ONLY out/efi-ios-ufs-touch-debug-1/esp.img, same proven touch kernel,
+CPU6/fit60/nativeUFS, --console keeps text visible. NOT a fix and NOT installed.
+Local install.sh first captures current log then ESP backup/BusyBoxdd/fullSHA.
+Added --console option to host build_boot.py and capture helper; syntax+ESP
+SHA checked. IOS_TOUCH_READY.md updated. User asks HOW buttons can be added:
+need SM8550 PMIC/SPMI+GPIO key input -> existing HID, not donor SM7150 MMIO.
+Current live DT has PMK8350 PON power and resin (linux codes116 and115);
+confirm remaining volume GPIO wiring before implementing. No buttons done yet.
+
 ## USER CONFIRMED TOUCH WORKS; native iOS+touch3 image READY — 2026-10-23
 
 User confirmed "все работает, тач" on touchprobe3 with kernelCI40015010182,
