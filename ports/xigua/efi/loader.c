@@ -106,6 +106,7 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE handle, EFI_SYSTEM_TABLE *table)
     EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *fs = NULL;
     EFI_FILE_PROTOCOL *root = NULL, *file = NULL;
     EFI_PHYSICAL_ADDRESS ram = RAM_BASE, image = 0xffffffff, fdt = 0xffffffff;
+    EFI_PHYSICAL_ADDRESS ufs_dma = UFS_DMA_BASE;
     CONST CHAR16 *stage = L"EL1 check";
     BOOLEAN ram_allocated = FALSE, image_allocated = FALSE, fdt_allocated = FALSE;
     VOID *map = NULL;
@@ -119,6 +120,13 @@ EFI_STATUS EFIAPI efi_main(EFI_HANDLE handle, EFI_SYSTEM_TABLE *table)
     status = bs->AllocatePages(AllocateAddress, EfiLoaderData, RAM_BYTES / 4096, &ram);
     if (EFI_ERROR(status)) goto failed;
     ram_allocated = TRUE;
+    if (UFS_DMA_BYTES) {
+        stage = L"UFS DMA reservation below 4 GiB";
+        status = bs->AllocatePages(AllocateAddress, EfiLoaderData, UFS_DMA_BYTES / 4096, &ufs_dma);
+        if (EFI_ERROR(status)) goto failed;
+        bytes_zero((VOID *)(UINTN)ufs_dma, UFS_DMA_BYTES);
+        number(L"XIGUA UFS DMA base: ", ufs_dma);
+    }
     stage = L"native Image allocation";
     status = bs->AllocatePages(AllocateMaxAddress, EfiLoaderCode, image_pages, &image);
     if (EFI_ERROR(status)) goto failed;

@@ -27,6 +27,10 @@ def main():
     p.add_argument('--external-ramdisk-base', type=lambda x: int(x, 0))
     p.add_argument('--external-ramdisk-size', type=lambda x: int(x, 0))
     p.add_argument('--ios-userland', action='store_true', help='Enable the iOS display service and launchd boot arguments')
+    storage = p.add_mutually_exclusive_group()
+    storage.add_argument('--ufs-probe', action='store_true', help='Read-only UFS CRC probe before a small RAM-root init')
+    storage.add_argument('--ufs-root', action='store_true', help='Use the allocated linux UFS partition as the iOS root')
+    p.add_argument('--ufs-crc-cache', type=Path, help='Verified CRC table for the prepared 12 GiB root')
     p.add_argument('--cpus', type=int, choices=range(1, 9), default=1,
                    help='Number of verified CPU nodes to enable (default 1)')
     p.add_argument('--fb-hz', type=int, choices=range(1, 61), default=30,
@@ -38,12 +42,32 @@ def main():
     a = p.parse_args()
     if a.ramdisk and not a.kernel:
         p.error('--ramdisk requires --kernel')
+    if (a.ufs_probe or a.ufs_root) and (not a.kernel or a.external_ramdisk_base or a.external_ramdisk_size):
+        p.error('UFS modes require a kernel and no external RAM root')
+    if a.ufs_probe and (not a.ramdisk or not a.ufs_crc_cache or a.ios_userland):
+        p.error('UFS probe requires a small diagnostic RAM disk and CRC cache, without iOS userland')
+    if a.ufs_root and (a.ramdisk or not a.ios_userland):
+        p.error('UFS root requires iOS userland without a RAM disk')
     external = a.external_ramdisk_base is not None or a.external_ramdisk_size is not None
     if external and (not a.kernel or a.ramdisk or not a.external_ramdisk_base or not a.external_ramdisk_size):
         p.error('External RAM disk requires a kernel and both base/size, without --ramdisk')
     profile = json.loads(a.profile.read_text())
     profile['cpu_count'] = a.cpus
     profile['display_mode'] = a.display_mode
+    if a.ufs_probe or a.ufs_root:
+        if profile['kind'] != 'phone':
+            p.error('UFS firmware handoff is specific to the verified PJA110 phone')
+        indices, crcs = [0, 1536, 3071], []
+        if a.ufs_crc_cache:
+            cache = json.loads(a.ufs_crc_cache.read_text())
+            if (cache['root_bytes'] != 0x300000000 or cache['chunk_bytes'] != 0x400000 or
+                    cache['root_sha256'] != '7ed76a14da8d9bf21ceb2d3f62c2524492e0ec30a3405128ca0c7879322fd7df' or
+                    len(cache['crcs']) != 3072 or any(type(c) is not int or not 0 <= c <= 0xffffffff for c in cache['crcs'])):
+                p.error('UFS probe cache must identify the verified root already installed in linux')
+            crcs = [cache['crcs'][i] for i in indices]
+        profile['ufs'] = {'reg': [0x1d84000, 0x3000], 'dma_region': [0xc4000000, 0x200000],
+                          'mode': 1 if a.ufs_probe else 2,
+                          'probe_offsets': [i * 0x400000 for i in indices] if crcs else [], 'probe_crcs': crcs}
     if a.ios_userland:
         profile['gui'] = True
     fb = profile['framebuffer']
@@ -62,9 +86,12 @@ def main():
     info = {'kind': 'diagnostic', 'profile': profile}
     payload = out / 'payload.bin'
     if a.kernel:
+        root_device = 'ufsroot0' if a.ufs_root else 'md0'
         command = (f'debug=0xc serial=3 cpus={a.cpus} keepsyms=1 -enable_kprintf_spam -noprogress '
-                   'rd=md0 sweetusb=0 sweettouch=0 sweetkeys=0 sweetlog=0 sweetbattery=0 '
-                   'ufsrw=0 wdt=-1 wdt_test=no_user_checkin')
+                   f'rd={root_device} sweetusb=0 sweettouch=0 sweetkeys=0 sweetlog={int(a.ufs_root)} sweetbattery=0 '
+                   f'ufsrw={int(a.ufs_root)} wdt=-1 wdt_test=no_user_checkin')
+        if a.ufs_probe or a.ufs_root:
+            command += f' xiguaufs={1 if a.ufs_probe else 2} ufsroot=linux ufscache=0 ufswait=1 ufslogsecs=5'
         if a.ios_userland:
             command += ' unentitled_ios_sim_launch=1 ignition_level=1 rootrw=1 launchd_unsecure_cache=1 sweetfb_noconsole=1'
             command += f' sweetfb_hz={a.fb_hz}'
@@ -95,7 +122,7 @@ def main():
             kernel_info['kernel_end'] = hex(virt_base + base - ram + length)
             kernel_info['ramdisk'] = [hex(base), hex(length)]
         payload.write_bytes(blob)
-        info.update(kind='xnu-ram-root', kernel=kernel_info,
+        info.update(kind='xnu-ufs-root' if a.ufs_root else 'xnu-ram-root', kernel=kernel_info,
                     kernel_sha256=hashlib.sha256(a.kernel.read_bytes()).hexdigest())
     else:
         payload.write_bytes(b'')

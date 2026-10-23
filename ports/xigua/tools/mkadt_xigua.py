@@ -57,6 +57,20 @@ def make(profile):
                                profile['gicd_size'], profile['gicr'] - mkadt.SOC_BASE,
                                profile['gicr_size']))
     put(gic, 'virtual-timer-intid', struct.pack('<I', profile['virtual_timer_intid']))
+    if 'ufs' in profile:
+        ufs = profile['ufs']
+        if (profile['kind'] != 'phone' or ufs['reg'] != [0x1d84000, 0x3000] or
+                ufs['dma_region'] != [0xc4000000, 0x200000] or ufs['mode'] not in [1, 2]):
+            raise ValueError('UFS profile must match the verified PJA110 host and firmware allocation')
+        props = [('reg', struct.pack('<2Q', *ufs['reg'])),
+                 ('dma-region', struct.pack('<2Q', *ufs['dma_region']))]
+        if ufs['mode'] == 1:
+            offsets, crcs = ufs['probe_offsets'], ufs['probe_crcs']
+            if offsets != [0, 0x180000000, 0x2ffc00000] or len(crcs) != 3:
+                raise ValueError('UFS probe requires the beginning, middle and end CRCs of the installed root')
+            props.extend([('probe-offsets', struct.pack('<3Q', *offsets)),
+                          ('probe-crcs', struct.pack('<3I', *crcs))])
+        root.children.append(mkadt.node('sweet-ufs', props))
     stride = profile.get('gicr_stride', 0)
     if profile.get('kind') == 'phone' and count > 1 and not stride:
         raise ValueError('Recreate the phone SMP profile with the live DT redistributor stride')

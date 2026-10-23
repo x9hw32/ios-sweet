@@ -65,6 +65,10 @@ def main():
                  'RAM_BASE': ram, 'RAM_BYTES': size, 'ROOT_BASE': root_base,
                  'ROOT_BYTES': root_bytes, 'ROOT_BLOCK_SIZE': 4096, 'ROOT_CHUNK': chunk,
                  'ROOT_PARTITION_BYTES': sizes[a.root_partition]}
+    dma = profile.get('ufs', {}).get('dma_region', [0, 0])
+    if dma != [0, 0] and dma != [0xc4000000, 0x200000]:
+        p.error('Unexpected firmware UFS DMA reservation')
+    constants.update(UFS_DMA_BASE=dma[0], UFS_DMA_BYTES=dma[1])
     header = ''.join(f'#define {k} {v:#x}ULL\n' for k, v in constants.items())
     header += f'#define ROOT_NAME L"{a.root_partition}"\n'
     header += 'static const UINT32 root_crc[] = {' + ','.join(hex(x) for x in crcs or [0]) + '};\n'

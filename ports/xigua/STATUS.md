@@ -1,3 +1,39 @@
+## User orders UFS implementation + touch if possible — 2026-10-23
+
+Explicit user instruction: DO IT, also implement touch if possible. This
+supersedes waiting for display2 observation; current implementation task UFS,
+then Synaptics S3910 SPI touch. No QEMU; tests directly on phone; fb>=30Hz.
+Current USB/fastboot absent, phone may still be in display2 iOS. Manual recovery
+will be needed once new image is ready. Do not ask redundant permission.
+
+IMPLEMENTED candidate native UFS handoff in0082 via tools/xigua_ufs_overlay.py:
+opt-in xiguaufs=1 read-only probe, =2 UFS root; default stays disabled.
+Explicit register-only MMIO; lowDMA0xc4000000/2MiB (known conventional UEFI range)
+reserved by AllocateAddress before EBS; emitted same DMA region in ADT.
+XNU single Normal-NC mapping of firmware-owned DMA buffer, no highbank DMA or
+invalid physical cache ops. Inherit live legacyUTP host state, report HCE/HCS/
+CAP/version, validate list takeover, genericSCSI onLUN0. Require exact host
+1d84000/3000, partitionname linux and known77137424384B capacity. No old PMIC,
+Goodix or USB init onXIGUA. Writes allowed ONLY mode2+ufsrw1 and only inlinux.
+
+Read-only probe compares first/middle/last4MiB of prepared12GiB root against
+existing verifiedCRC cache (three checks,12MiB total); HFSXheader also verified.
+IOFindBSDRoot triggers probe before tiny RAM-root init. No12GiB copy/no15minwait.
+Host CLI --ufs-probe --ramdisk build/xigua-init/root-padded.img --ufs-crc-cache
+artifacts/ios-20H392/root-12g/verified-crcs.json; --ufs-root --ios-userland selects
+rd=ufsroot0, boundedRW, persistentconsole tail oflinux and processsampler.
+Native root does NOT use baselineCRCs after iOS has modified filesystem.
+
+Fullpatch applies cleanly.3 new small host checks pass (real C CRCprobe versus
+independentzlib data, corruption/geometry rejects, ADT DMA/sample guards).
+Full32checks + EFIshim pipeline being checked. out/host-ufs-* artifacts use
+OLD kernel solely to compile/check host pipeline: DO NOT BOOT THOSE ON PHONE.
+Next remotekernelCI, inspect result, build actual kernel probe/fullroot variants,
+install probeESP via recoveryBusyBoxdd, temporaryMu boot, obtain READ CHECK PASS.
+Do not install RW UFS root until actual readchecks pass. Rootlinux remains
+original verified12GiB; preserveworkingESP2/display2 fallback. Bootpartitions
+notflashed. Touch not yet implemented; sources under .cache/input-source/oneplus/.
+
 ## Linux UFS references acquired; no new phone changes — 2026-10-23
 
 User can provide Linux kernel sources only. Official OnePlus Ace2Pro sources

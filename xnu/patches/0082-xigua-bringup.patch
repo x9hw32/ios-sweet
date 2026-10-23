@@ -595,15 +595,79 @@
  #endif /* ARM64_BOARD_CONFIG_SWEET */
 --- a/bsd/dev/sweet_ufs.c
 +++ b/bsd/dev/sweet_ufs.c
-@@ -19,6 +19,7 @@
+@@ -19,7 +19,11 @@
   * outside the named partition can be written.
   */
  #if defined(ARM64_BOARD_CONFIG_SWEET)
 +#include <pexpert/arm64/board_name.h>
  #include <sys/param.h>
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++#include <pexpert/arm64/XiguaMMIO.h>
++#endif
  #include <sys/systm.h>
  #include <sys/buf.h>
-@@ -220,7 +221,7 @@
+ #include <sys/conf.h>
+@@ -113,6 +117,9 @@
+ 	dev_t bdev;
+ 	bool ready;
+ } su;
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++static uint32_t xigua_ufs_mode;
++#endif
+ 
+ static LCK_GRP_DECLARE(sweet_ufs_grp, "sweet_ufs");
+ static LCK_MTX_DECLARE(sweet_ufs_lock, &sweet_ufs_grp);
+@@ -120,25 +127,47 @@
+ static inline uint32_t
+ ufs_rd(uint32_t off)
+ {
+-	return *(volatile uint32_t *)(su.regs + off);
++	#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    return xigua_mmio_read32(su.regs + off);
++#else
++    return *(volatile uint32_t *)(su.regs + off);
++#endif
+ }
+ 
+ static inline void
+ ufs_wr(uint32_t off, uint32_t v)
+ {
+-	*(volatile uint32_t *)(su.regs + off) = v;
++	#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    xigua_mmio_write32(su.regs + off, v);
++#else
++    *(volatile uint32_t *)(su.regs + off) = v;
++#endif
+ }
+ 
+ static void
+ dma_sync(uint32_t off, uint32_t len)
+ {
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    /* Firmware flushed this allocation before handoff; XNU owns a single
++     * Normal-NC mapping outside its managed RAM. No cached alias exists. */
++    (void)off; (void)len;
++    __builtin_arm_dsb(0xf);
++#else
+ 	flush_dcache64((addr64_t)(su.dma_pa + off), len, TRUE);
++#endif
+ }
+ 
+ static void
+ dma_clean(uint32_t off, uint32_t len)
+ {
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    /* Firmware flushed this allocation before handoff; XNU owns a single
++     * Normal-NC mapping outside its managed RAM. No cached alias exists. */
++    (void)off; (void)len;
++    __builtin_arm_dsb(0xf);
++#else
+ 	clean_dcache64((addr64_t)(su.dma_pa + off), len, TRUE);
++#endif
+ }
+ 
+ /*
+@@ -220,7 +249,7 @@
  		uint64_t now = mach_absolute_time();
  		if (now > deadline) {
  			ufs_wr(REG_UTRLCLR, ~1u);
@@ -612,7 +676,7 @@
  			return ETIMEDOUT;
  		}
  		if (sleepable && now >= spin_until) {
-@@ -249,7 +250,7 @@
+@@ -249,7 +278,7 @@
  
  	uint32_t ocs = utrd->dw2 & 0xff;
  	if (ocs || ucd->resp[0] != 0x21 || ucd->resp[6] || ucd->resp[7]) {
@@ -621,7 +685,7 @@
  		    cdb[0], ocs, ucd->resp[0], ucd->resp[6], ucd->resp[7]);
  		return EIO;
  	}
-@@ -281,7 +282,7 @@
+@@ -281,7 +310,7 @@
  	if (!su.writable || !su.nblocks || count == 0 || count > BOUNCE_SIZE / UFS_BLOCK ||
  	    lba < su.first_block || lba - su.first_block >= su.nblocks ||
  	    count > su.nblocks - (lba - su.first_block) || lba + count - 1 > UINT32_MAX) {
@@ -630,7 +694,7 @@
  		return EPERM;
  	}
  	uint8_t cdb[10] = {
-@@ -308,7 +309,7 @@
+@@ -308,7 +337,7 @@
  		return error;
  	}
  	if (memcmp(b, "EFI PART", 8) != 0) {
@@ -639,16 +703,18 @@
  		return ENXIO;
  	}
  	uint64_t entry_lba;
-@@ -317,7 +318,7 @@
+@@ -316,8 +345,8 @@
+ 	memcpy(&entry_lba, b + 72, 8);
  	memcpy(&nent, b + 80, 4);
  	memcpy(&esz, b + 84, 4);
- 	if (esz != 128 || nent == 0 || nent * esz > BOUNCE_SIZE) {
+-	if (esz != 128 || nent == 0 || nent * esz > BOUNCE_SIZE) {
 -		printf("SWEET UFS: unsupported GPT entries %u x %u\n", nent, esz);
++	if (esz != 128 || nent == 0 || nent > BOUNCE_SIZE / esz) {
 +		printf(ARM_BOARD_NAME " UFS: unsupported GPT entries %u x %u\n", nent, esz);
  		return ENXIO;
  	}
  	error = ufs_read_blocks(entry_lba, (nent * esz + UFS_BLOCK - 1) / UFS_BLOCK);
-@@ -349,7 +350,7 @@
+@@ -349,25 +378,33 @@
  		su.nblocks = last - first + 1;
  		return 0;
  	}
@@ -657,9 +723,18 @@
  	return ENOENT;
  }
  
-@@ -358,16 +359,16 @@
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++#include "xigua_ufs_verify.h"
++#endif
++
+ static int
+ ufs_take_over_host(void)
  {
  	uint32_t hce = ufs_rd(REG_HCE), hcs = ufs_rd(REG_HCS);
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    printf("XIGUA UFS: HCE=%x HCS=%x CAP=%x VER=%x DMA=0x%llx\n",
++        hce, hcs, ufs_rd(REG_CAP), ufs_rd(0x08), su.dma_pa);
++#endif
  	if (!(hce & 1) || !(hcs & HCS_DP) || !(hcs & HCS_UTRLRDY)) {
 -		printf("SWEET UFS: host not ready (hce 0x%x hcs 0x%x)\n", hce, hcs);
 +		printf(ARM_BOARD_NAME " UFS: host not ready (hce 0x%x hcs 0x%x)\n", hce, hcs);
@@ -677,7 +752,7 @@
  		    su.dma_pa);
  		return ENXIO;
  	}
-@@ -381,7 +382,7 @@
+@@ -381,7 +418,7 @@
  	/* Never ring a doorbell unless the host uses our list. */
  	if (ufs_rd(REG_UTRLBA) != (uint32_t)list || ufs_rd(REG_UTRLBAU) != (uint32_t)(list >> 32) ||
  	    !(ufs_rd(REG_UTRLRSR) & 1)) {
@@ -686,18 +761,24 @@
  		return EIO;
  	}
  	return 0;
-@@ -586,6 +587,10 @@
+@@ -586,19 +623,30 @@
  static int
  sweet_ufs_init(void)
  {
 +#if defined(ARM64_BOARD_CONFIG_XIGUA)
-+    printf("XIGUA: UFS/input/USB/disk-log disabled; RAM-root only\n");
-+    return ENXIO;
++    PE_parse_boot_argn("xiguaufs", &xigua_ufs_mode, sizeof(xigua_ufs_mode));
++    if (xigua_ufs_mode != 1 && xigua_ufs_mode != 2) return ENXIO;
 +#endif
  	DTEntry node;
  	uintptr_t const *reg = NULL;
  	unsigned int size = 0;
-@@ -595,7 +600,7 @@
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    char want[64] = "linux";
++#else
+ 	char want[64] = "userdata";
++#endif
+ 	int error;
+ 
  	if (SecureDTLookupEntry(NULL, "/sweet-ufs", &node) != kSuccess ||
  	    SecureDTGetProperty(node, "reg", (void const **)&reg, &size) != kSuccess ||
  	    size < 2 * sizeof(uintptr_t)) {
@@ -706,8 +787,31 @@
  		return ENXIO;
  	}
  	PE_parse_boot_argn("ufsroot", want, sizeof(want));
-@@ -610,7 +615,7 @@
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    if (strcmp(want, "linux") || reg[0] != 0x1d84000 || reg[1] != 0x3000) return EINVAL;
++#endif
+ 	uint32_t rw = 0;
+ 	PE_parse_boot_argn("ufsrw", &rw, sizeof(rw));
+ 	uint32_t cache = 0, wait = 0;
+@@ -608,9 +656,24 @@
+ 	su.wait = (wait == 1);
+ 
  	su.regs = ml_io_map(reg[0], reg[1]);
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    const void *dma_prop;
++    unsigned int dma_size;
++    uint64_t dma_region[2];
++    if (SecureDTGetProperty(node, "dma-region", &dma_prop, &dma_size) != kSuccess ||
++        dma_size != sizeof(dma_region)) return EINVAL;
++    memcpy(dma_region, dma_prop, sizeof(dma_region));
++    if (dma_region[0] != XIGUA_UFS_DMA_BASE || dma_region[1] != XIGUA_UFS_DMA_BYTES ||
++        DMA_SIZE > dma_region[1]) return EINVAL;
++    extern vm_offset_t ml_io_map_wcomb(vm_offset_t, vm_size_t);
++    su.dma_pa = dma_region[0];
++    su.dma = ml_io_map_wcomb(dma_region[0], dma_region[1]);
++    if (!su.regs || !su.dma) return ENOMEM;
++    bzero((void *)su.dma, DMA_SIZE);
++#else
  	if (kmem_alloc_contig(kernel_map, &su.dma, DMA_SIZE, PAGE_MASK, 0, 0,
  	    KMA_DATA | KMA_ZERO | KMA_PERMANENT, VM_KERN_MEMORY_IOKIT) != KERN_SUCCESS) {
 -		printf("SWEET UFS: no contiguous DMA memory\n");
@@ -715,16 +819,57 @@
  		return ENOMEM;
  	}
  	ppnum_t pn = pmap_find_phys(kernel_pmap, (addr64_t)su.dma);
-@@ -651,7 +656,7 @@
+@@ -618,6 +681,7 @@
+ 		return ENOMEM;
+ 	}
+ 	su.dma_pa = ptoa_64(pn);
++#endif
+ 	su.lun = 0;
+ 	su.secsize = DEV_BSIZE;
+ 
+@@ -631,6 +695,9 @@
+ 	}
+ 	if (!error) {
+ 		error = ufs_find_partition(want);
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++        if (!error) error = xigua_ufs_verify(node, xigua_ufs_mode == 1);
++#endif
+ 	}
+ 	lck_mtx_unlock(&sweet_ufs_lock);
+ 	if (error) {
+@@ -649,17 +716,30 @@
+ 	devfs_make_node(su.bdev, DEVFS_BLOCK, UID_ROOT, GID_OPERATOR, 0640, "ufsroot0");
+ 	devfs_make_node(makedev(su.cmajor, 0), DEVFS_CHAR, UID_ROOT, GID_OPERATOR, 0640, "rufsroot0");
  	/* Only now, with the partition bounds known, can writes be allowed. */
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    su.writable = (xigua_ufs_mode == 2 && rw != 0);
++#else
  	su.writable = (rw != 0);
++#endif
  	su.ready = true;
 -	printf("SWEET UFS: \"%s\" on LUN %u: first block 0x%llx, %llu MiB, %s, DMA at 0x%llx\n",
 +	printf(ARM_BOARD_NAME " UFS: \"%s\" on LUN %u: first block 0x%llx, %llu MiB, %s, DMA at 0x%llx\n",
  	    want, su.lun, su.first_block, su.nblocks * UFS_BLOCK >> 20,
  	    su.writable ? "read-write" : "read-only", su.dma_pa);
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    if (xigua_ufs_mode == 2) {
++        sweet_log_start();
++        sweet_sample_start();
++    }
++#else
  	sweet_log_start();
-@@ -743,7 +748,7 @@
+ 	sweet_sample_start();
++#endif
+ 	/* Input drivers (HID services in iokit/Kernel/arm/hid/SweetHID.cpp). */
++#if !defined(ARM64_BOARD_CONFIG_XIGUA)
+ 	sweet_keys_init();
+ 	sweet_touch_init();
+ 	sweet_usb_probe();
++#endif
+ 	return 0;
+ }
+ 
+@@ -743,7 +823,7 @@
  	uint64_t flushed = 0, seq = 0;
  	void *bounce = (void *)(su.dma + DMA_BOUNCE);
  
@@ -733,7 +878,7 @@
  	    SWEET_LOG_BLOCKS * UFS_BLOCK >> 10, base);
  	for (;;) {
  		(void)tsleep(&sweet_log_chan, PZERO, "sweetlog", hz * (int)sweet_log_secs);
-@@ -779,7 +784,7 @@
+@@ -779,7 +859,7 @@
  		}
  		lck_mtx_unlock(&sweet_ufs_lock);
  		if (error) {
@@ -986,6 +1131,76 @@
  	if (kernel_thread_start(ud_thread, NULL, &thread) == KERN_SUCCESS) {
  		thread_deallocate(thread);
  	}
+--- /dev/null
++++ b/bsd/dev/xigua_ufs_verify.h
+@@ -0,0 +1,67 @@
++/* XIGUA's allocated linux partition; included after the generic read helper.
++ * Probe mode reads three independently checksummed 4 MiB regions. Root mode
++ * permits a filesystem changed by previous iOS boots, so checks its header.
++ */
++#ifndef XIGUA_UFS_VERIFY_H
++#define XIGUA_UFS_VERIFY_H
++#define XIGUA_UFS_PARTITION_BYTES 77137424384ULL
++#define XIGUA_UFS_ROOT_BYTES 0x300000000ULL
++#define XIGUA_UFS_DMA_BASE 0xc4000000ULL
++#define XIGUA_UFS_DMA_BYTES 0x200000ULL
++
++static uint32_t
++xigua_ufs_crc32(uint32_t crc, const uint8_t *data, uint32_t size)
++{
++    for (uint32_t i = 0; i < size; i++) {
++        crc ^= data[i];
++        for (unsigned bit = 0; bit < 8; bit++)
++            crc = (crc >> 1) ^ (0xedb88320U & (0U - (crc & 1U)));
++    }
++    return crc;
++}
++
++static int
++xigua_ufs_verify(DTEntry node, bool full_probe)
++{
++    if (su.nblocks != XIGUA_UFS_PARTITION_BYTES / UFS_BLOCK || !su.first_block) {
++        printf("XIGUA UFS: linux partition geometry mismatch\n");
++        return ENXIO;
++    }
++    int error = ufs_read_blocks(su.first_block, 1);
++    if (error) return error;
++    const uint8_t *header = (const uint8_t *)(su.dma + DMA_BOUNCE + 1024);
++    if (memcmp(header, "HX\0\5", 4)) {
++        printf("XIGUA UFS: linux does not contain the prepared HFSX root\n");
++        return EINVAL;
++    }
++    if (!full_probe) return 0;
++
++    const void *offset_prop, *crc_prop;
++    unsigned int offset_size, crc_size;
++    if (SecureDTGetProperty(node, "probe-offsets", &offset_prop, &offset_size) != kSuccess ||
++        SecureDTGetProperty(node, "probe-crcs", &crc_prop, &crc_size) != kSuccess ||
++        offset_size != 3 * sizeof(uint64_t) || crc_size != 3 * sizeof(uint32_t)) {
++        return EINVAL;
++    }
++    for (unsigned sample = 0; sample < 3; sample++) {
++        uint64_t offset;
++        uint32_t expected;
++        memcpy(&offset, (const uint8_t *)offset_prop + sample * 8, 8);
++        memcpy(&expected, (const uint8_t *)crc_prop + sample * 4, 4);
++        if (offset % UFS_BLOCK || offset > XIGUA_UFS_ROOT_BYTES - 0x400000) return EINVAL;
++        uint32_t crc = ~0U;
++        for (uint32_t done = 0; done < 0x400000; done += BOUNCE_SIZE) {
++            error = ufs_read_blocks(su.first_block + (offset + done) / UFS_BLOCK,
++                BOUNCE_SIZE / UFS_BLOCK);
++            if (error) return error;
++            crc = xigua_ufs_crc32(crc, (const uint8_t *)(su.dma + DMA_BOUNCE), BOUNCE_SIZE);
++        }
++        crc = ~crc;
++        printf("XIGUA UFS: sample %u offset=0x%llx CRC=%08x expected=%08x\n",
++            sample, offset, crc, expected);
++        if (crc != expected) return EIO;
++    }
++    printf("XIGUA UFS: READ CHECK PASS, 3 x 4 MiB match; disk writes disabled\n");
++    return 0;
++}
++#endif
 --- a/bsd/kern/bsd_init.c
 +++ b/bsd/kern/bsd_init.c
 @@ -79,6 +79,7 @@
@@ -2055,6 +2270,25 @@
      "     'IOProbeScore'    = 10000:32;"
      "   },"
      "   {"
+--- a/iokit/bsddev/IOKitBSDInit.cpp
++++ b/iokit/bsddev/IOKitBSDInit.cpp
+@@ -770,6 +770,16 @@
+ //
+ //	SWEET: root on a GPT partition of the internal UFS (bsd/dev/sweet_ufs.c)
+ //
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    uint32_t ufs_probe = 0;
++    PE_parse_boot_argn("xiguaufs", &ufs_probe, sizeof(ufs_probe));
++    if (ufs_probe == 1) {
++        extern int sweet_ufs_rootdev(dev_t *dev);
++        dev_t probe_device;
++        int probe_error = sweet_ufs_rootdev(&probe_device);
++        if (probe_error) panic("XIGUA UFS: read-only probe failed: %d", probe_error);
++    }
++#endif
+ 	if (strcmp(rdBootVar, "ufsroot0") == 0) {
+ 		extern int sweet_ufs_rootdev(dev_t *dev);
+ 		OSSafeReleaseNULL(matching);
 --- a/libkern/conf/Makefile.template
 +++ b/libkern/conf/Makefile.template
 @@ -19,7 +19,7 @@

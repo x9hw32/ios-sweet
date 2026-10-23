@@ -4,6 +4,7 @@ import argparse
 import difflib
 from pathlib import Path
 import re
+from xigua_ufs_overlay import apply as apply_ufs_overlay
 
 
 def overlay(source):
@@ -152,15 +153,9 @@ void sweet_early_disable(void) {}
     replace(vm, '#if defined(SWEET)\n',
             '#if defined(SWEET) && !defined(ARM64_BOARD_CONFIG_XIGUA)\n', count=3)
 
-    # Independent of boot args: no UFS takeover, persistent disk log, or drivers
-    # initialized by sweet_ufs_init can run until the SM8550 port is audited.
-    replace('bsd/dev/sweet_ufs.c', 'sweet_ufs_init(void)\n{\n', '''sweet_ufs_init(void)
-{
-#if defined(ARM64_BOARD_CONFIG_XIGUA)
-    printf("XIGUA: UFS/input/USB/disk-log disabled; RAM-root only\\n");
-    return ENXIO;
-#endif
-''')
+    # SM8550 UFS is opt-in, uses firmware-reserved low DMA RAM, and keeps
+    # the donor's unrelated PMIC/touch/USB hardware initialization disabled.
+    apply_ufs_overlay(replace, create)
     replace('iokit/Kernel/arm/SweetBattery.cpp',
             '\tfReal = real == 1 && sweet_spmi_init() == 0;', '''#if defined(ARM64_BOARD_CONFIG_XIGUA)
     fReal = false; /* SM7150 PMIC addresses do not apply to SM8550. */
