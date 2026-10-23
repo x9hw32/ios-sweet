@@ -1,3 +1,25 @@
+## Touch probe3 SENT with VDD vote and unconditional response polling — 2026-10-23
+
+KernelCI40015010182 SUCCESS at29c838519c86adb9bf4766334ad0861f84abe689.
+Artifact ZIP CRC and SHA256 verified:
+eff575ab461bc07ff83e05f70f81ad53c81a56deed55ea745da1586132ed90eb.
+Linked binary contains new VDD and bus-header diagnostics. Both C files
+cross-compiled against real XNU headers, 41 host tests PASS, patch apply PASS.
+
+Saved previous ESP under diagnostics/ios-before-touch-probe-3 and restored
+original through recovery BusyBox dd, then installed out/efi-touch-probe-3/esp.img
+with full readback SHA verified:
+af576ee7e8b3b6273c4d753e0b49d9f11a3cc5b23b322b6086ac2ba5d70769a1.
+Temporary Mu fastboot boot Sending+Booting OKAY; receipt diagnostics/
+touch-probe-3-boot.{json,txt}, install.json. Tiny RAM PID1 diagnostic, CPU6,
+fit60 cap, touchON, UFSOFF, NO Apple userland/root partition writes.
+Phone now running this probe; waiting for USER SCREEN RESULT via async.
+Need XIGUA TOUCH VDD RSC id/cfg/result, bus read header, failure step or
+coordinate reports/point changes after taps. Do not claim working touch yet,
+and do not reboot before getting the screen result. No full iOS+touch3 image
+has been built or booted. Keep focus on touch, buttons separate next task.
+No local QEMU. All diagnostic host mounts and recovery debugfs unmounted.
+
 ## Touch probe2 diagnosed; power and polling candidate ready for CI — 2026-10-23
 
 USER probe2: application-info/tcm-response errno60; op20; CMD48000000,
