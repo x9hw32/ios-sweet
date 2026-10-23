@@ -13,6 +13,7 @@
 #include <pexpert/pexpert.h>
 #include <pexpert/arm64/XiguaMMIO.h>
 #include "xigua_tcm.h"
+#include "xigua_geni_spi.h"
 
 extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
 extern kern_return_t thread_terminate(thread_t);
@@ -25,6 +26,8 @@ static uint16_t tp_active;
 static struct xigua_contact tp_contacts[10];
 static uint8_t tp_packet[1024], tp_transfer[1027];
 static int tp_sleep_channel;
+static const char *tp_stage = "mapping";
+static int tp_fault_logged;
 
 static uint32_t tp_read(unsigned reg) { return xigua_mmio_read32(tp_se + reg); }
 static void tp_write(unsigned reg, uint32_t v) { xigua_mmio_write32(tp_se + reg, v); }
@@ -43,15 +46,31 @@ static void tp_gpio_output(unsigned pin, unsigned value) {
 }
 static int tp_attention(void) { return !(xigua_mmio_read32(tp_gpio + 25 * 0x1000 + 4) & 1); }
 
+static int tp_fault(const char *phase, int error, unsigned opcode, unsigned sent, unsigned received) {
+    if (!tp_fault_logged++ && tp_se) {
+        printf("XIGUA TOUCH: failure step=%s phase=%s err=%d op=%x sent=%u rx=%u\n",
+            tp_stage, phase, error, opcode, sent, received);
+        printf("XIGUA TOUCH: CMD=%x IRQ=%x ACTIVE=%x TX=%x RX=%x EN=%x\n",
+            tp_read(0x600), tp_read(0x610), tp_read(0x40), tp_read(0x800), tp_read(0x804), tp_read(0x614));
+        printf("XIGUA TOUCH: MCLK=%x SEL=%x IOS=%x TOP=%x GPIO25=%x\n",
+            tp_read(0x48), tp_read(0x7c), tp_read(0x908), tp_read(0xe1c),
+            xigua_mmio_read32(tp_gpio + 25 * 0x1000 + 4));
+    }
+    return error;
+}
+
 static int tp_command(unsigned opcode, unsigned parameters) {
     tp_write(0x618, ~0U);
     tp_write(0x600, (opcode << 27) | parameters);
     uint64_t deadline = tp_deadline(100);
     for (;;) {
         uint32_t status = tp_read(0x610);
-        if (status & 0xe) return EIO;
+        if (status & 0xe) return tp_fault("command", EIO, opcode, 0, 0);
         if (status & 1) { tp_write(0x618, status); return 0; }
-        if (mach_absolute_time() > deadline) { tp_write(0x604, 2); return ETIMEDOUT; }
+        if (mach_absolute_time() > deadline) {
+            tp_fault("command", ETIMEDOUT, opcode, 0, 0);
+            tp_write(0x604, 2); return ETIMEDOUT;
+        }
         delay(1);
     }
 }
@@ -90,7 +109,10 @@ static int tp_spi(const uint8_t *tx, uint8_t *rx, unsigned size) {
         if (mach_absolute_time() > deadline) { error = ETIMEDOUT; break; }
         delay(1);
     }
-    if (error) tp_write(0x604, 2);
+    if (error) {
+        tp_fault("fifo", error, rx ? 3 : 1, sent, received);
+        tp_write(0x604, 2);
+    }
     tp_write(0x618, ~0U);
     int cs_error = tp_command(9, 0);
     return error ? error : cs_error;
@@ -152,7 +174,7 @@ static int tp_request(unsigned command, const uint8_t *data, unsigned size, unsi
             return EIO;
         }
     } while (mach_absolute_time() < deadline);
-    return ETIMEDOUT;
+    return tp_fault("tcm-response", ETIMEDOUT, command, size, 0);
 }
 
 static int tp_setup(void) {
@@ -161,16 +183,19 @@ static int tp_setup(void) {
     tp_se = ml_io_map(0xa90000, 0x4000);
     if (!tp_gcc || !tp_gpio || !tp_se) return ENOMEM;
     /* Only the selected serial engine and wrapper AHB votes, preserve others. */
+    tp_stage = "clock-votes";
     uintptr_t vote = tp_gcc + 0x52008;
     xigua_mmio_write32(vote, xigua_mmio_read32(vote) | (1U << 26) | (3U << 20));
     uint64_t deadline = tp_deadline(100);
     while ((xigua_mmio_read32(tp_gcc + 0x184e4) & (1U << 31)) && mach_absolute_time() < deadline) delay(1);
     if (xigua_mmio_read32(tp_gcc + 0x184e4) & (1U << 31)) return ETIMEDOUT;
+    tp_stage = "spi-firmware";
     unsigned firmware = tp_read(0x68);
     printf("XIGUA TOUCH: SPI firmware=%x status=%x\n", firmware, tp_read(0x40));
     if (((firmware >> 8) & 0xff) != 1 || (tp_read(0x40) & 1)) return ENXIO;
     tp_depth = (tp_read(0xe24) >> 16) & 0xff;
     if (tp_depth < 4 || tp_depth > 256 || ((tp_read(0xe24) >> 24) & 0x3f) != 32) return ENXIO;
+    tp_stage = "pinmux";
     for (unsigned pin = 44; pin <= 47; pin++) {
         uintptr_t address = tp_gpio + pin * 0x1000;
         uint32_t cfg = xigua_mmio_read32(address);
@@ -179,8 +204,8 @@ static int tp_setup(void) {
     uintptr_t irq_cfg = tp_gpio + 25 * 0x1000;
     xigua_mmio_write32(irq_cfg, (xigua_mmio_read32(irq_cfg) & ~0x3ffU) | (3U << 6) | 3U);
     xigua_mmio_write32(irq_cfg + 8, xigua_mmio_read32(irq_cfg + 8) & ~1U);
-    tp_write(0xe18, 0); tp_write(0xe1c, 0); /* polling, no GSI/interrupt delivery */
-    tp_write(0x258, 0); tp_write(0x614, 0); tp_write(0x644, 0);
+    tp_stage = "fifo-setup";
+    xigua_geni_spi_polling(tp_write);
     tp_write(0x28, tp_read(0x28) | 0x7f); tp_write(0xe30, tp_read(0xe30) | 0xf);
     tp_write(0x24, 0x7f); tp_write(0x20, 1);
     tp_write(0x48, (64U << 4) | 1U); /* conservative divider, existing parent */
@@ -191,10 +216,12 @@ static int tp_setup(void) {
     for (unsigned i = 0; i < 4; i++) packing[i] = ((7 + i * 8) << 5) | 0x10 | (7 << 1) | (i == 3);
     tp_write(0x260, packing[0] | (packing[1] << 10)); tp_write(0x264, packing[2] | (packing[3] << 10));
     tp_write(0x284, packing[0] | (packing[1] << 10)); tp_write(0x288, packing[2] | (packing[3] << 10));
-    tp_write(0x810, 1); tp_write(0x814, tp_depth - 2);
+    tp_write(0x80c, 0); tp_write(0x810, 1); tp_write(0x814, tp_depth - 2);
     tp_write(0x618, ~0U); tp_write(0x648, ~0U);
+    tp_stage = "power-reset";
     tp_gpio_output(10, 1); tp_pause(200);
     tp_gpio_output(24, 0); tp_pause(10); tp_gpio_output(24, 1); tp_pause(80);
+    tp_stage = "reset-identify";
     /* Drain the reset identification report before issuing requests. */
     deadline = tp_deadline(1000);
     while (!tp_attention() && mach_absolute_time() < deadline) tp_pause(5);
@@ -207,11 +234,13 @@ static int tp_setup(void) {
     unsigned length = 0;
     int error;
     if (tp_fw_mode && tp_fw_mode != 1) {
+        tp_stage = "run-application";
         error = tp_request(0x14, NULL, 0, NULL); /* run installed application */
         if (error) return error;
         tp_pause(200);
     }
     for (unsigned retry = 0; ; retry++) {
+        tp_stage = "application-info";
         error = tp_request(0x20, NULL, 0, &length); /* application information */
         if (error) return error;
         if (length < 38) return EIO;
@@ -225,15 +254,19 @@ static int tp_setup(void) {
     printf("XIGUA TOUCH: S3910 app raw=%ux%u objects=%u config=%u\n",
         tp_max_x, tp_max_y, xigua_le16(tp_packet + 36), config_size);
     const uint8_t hbp = 0x23, lbp[] = {0x11, 2, 0};
+    tp_stage = "disable-hbp";
     error = tp_request(0x06, &hbp, 1, NULL); /* disable HBP raw frames */
     if (error) return error;
+    tp_stage = "lbp-mode";
     error = tp_request(0x24, lbp, sizeof(lbp), NULL);
     if (error) return error;
     uint8_t config[512]; bzero(config, config_size);
     memcpy(config, xigua_tcm_report_config, sizeof(xigua_tcm_report_config));
+    tp_stage = "report-config";
     error = tp_request(0x26, config, config_size, NULL);
     if (error) return error;
     const uint8_t touch = 0x11;
+    tp_stage = "enable-coordinate-reports";
     return tp_request(0x05, &touch, 1, NULL);
 }
 

@@ -4,7 +4,7 @@ from pathlib import Path
 
 def apply(replace, create):
     root = Path(__file__).resolve().parent.parent
-    for name in ['xigua_tcm.h', 'xigua_touch.c']:
+    for name in ['xigua_tcm.h', 'xigua_geni_spi.h', 'xigua_touch.c']:
         create('bsd/dev/' + name, (root / 'kernel' / name).read_text())
     replace('bsd/conf/files', 'bsd/dev/sweet_touch.c\t\t\tstandard\n',
             'bsd/dev/sweet_touch.c\t\t\tstandard\nbsd/dev/xigua_touch.c\t\t\tstandard\n')

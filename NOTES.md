@@ -1,3 +1,55 @@
+## Native iOS boot confirmed, delay traced to LaunchServices; touch probe1 timed out — 2026-10-23
+
+User reports native UFS iOS DID start after ~15 min, buttons/touch inactive.
+Touch was OFF in that image. Saved diagnostics/ios-ufs-60-1-user-result.json.
+No significant boot-time improvement from dropping12GiB RAMroot. In recovery
+read actual native console: diagnostics/ios-ufs-60-1-native-log (263214B, flush
+127, seven samples). Data captured BEFORE any touch boot overwrote state.
+Header shows free98340864B (~94MiB), down from baseline432340992B (~413MiB).
+Actual log: hfs set VeryLowDisk, freeblks100400 dangerlimit131072. No ENOSPC
+message found; low space is evidence, not yet proof of the boot delay's cause.
+ACTUAL runtime CPU line: 6/6 CPUs initialized, SGI1 verified.
+
+Symbolicated59 frame addresses with ipsw dyld a2f batch. Results PRIVATE in
+ diagnostics/ios-ufs-60-1-native-analysis/{symbols.json,first-stacks.txt}.
+Across all seven samples (~90..810s after sampler start), SpringBoard main
+waits in __os_unfair_lock_lock_slow -> LSContextInitCommon -> LSApplicationRecord
+-> CCSModuleRepository associated-bundle lookup. A backboardd worker waits in
+XPC -> LAUNCH_SERVICES_IS_RESEEDING_ITS_DATABASE_AND_MAY_BLOCK -> LSCopyServerStore.
+This localizes a real startup gate to LaunchServices database initialization;
+it is not evidence that GPU rendering consumed the whole15min. RAMroot boots
+previously discarded all newly-built databases every reboot. First native UFS
+boot can persist them, so check native LS database/reboot before inventing a
+bypass. Need inspect current root and lsd state, then compare a second native
+boot. No root files changed by investigation.
+
+Host baseline mounted READ ONLY at build/boot-delay-root-ro for symbol lookup;
+MUST unmount before stopping. Source image unchanged. Read-only cache index
+outside image: build/boot-delay-reference/symbols.a2s (730MB), main executables
+copied in same private reference directory. Apple files and diagnostics NOTgit.
+New tools/analyze_boot_log.py handles per-process ASLR, crashes, space/waits,
+including concatenated/truncated console records; collect_ufs_log also saves
+volume-header.bin and volume.json via BusyBox reads (no mount/journal replay).
+40hostchecks currentlyPASS; fulltouch driver ARM64 compile being checked.
+
+Touch fastprobe1 installed with recoveryBusyBoxdd/fullSHAverified:
+out/efi-touch-probe-1/esp.img SHA
+dc79226241425fe4046b0b8331757f44d4b39fd2cee0bc66430d366f464a887e.
+TemporaryMu boot OKAY, diagnostics/touch-probe-1-boot.txt/json. Tiny RAMinit,
+GUI service/HID enabled via ios-userland flag but NO Apple userland, UFSOFF,
+no rootwrites, cpus6. User reports SPI firmware102 status0 then initerror60;
+no coordinate reports. Saved diagnostics/touch-probe-1-result.json.
+Candidate touchfix: arm local GENI IRQ event enables instead of zeroing them,
+while keeping external IRQ routing/GSI OFF. Matches Linux initialization and
+proven donor polling pattern. Add detailed step/phase/IRQ/clock/FIFO diagnostics.
+Need remote kernel CI and touchprobe2. Touch NOT working yet. User asked to
+return recovery while build runs; no subsequent phone changes yet.
+
+PreparedONLY full iOS+touch candidate from OLD kernel (not installed):
+out/efi-ios-ufs-touch-1/esp.img SHA
+aa784109f48bc74b6c4ea27357c49f21d1bbb4f7b214eb4eb539656e6452da78.
+Do not use it to repeat old timeout. Buttons remain separate future task.
+
 ## Native iOS from UFS at 60 fps cap: installed and boot sent — 2026-10-23
 
 User confirmed recovery; ADB verified PJA110/recovery/root BusyBox. Saved the

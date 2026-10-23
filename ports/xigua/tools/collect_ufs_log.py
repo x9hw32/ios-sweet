@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Read the native XNU console ring from the allocated linux partition in recovery."""
 import argparse
+import json
 from pathlib import Path
 import struct
 from install_ios_root import command, TARGET, CAPACITY
+from hfs_volume_info import volume_info
 
 RING_BYTES = 4 * 1024 * 1024
 BLOCK = 4096
@@ -41,9 +43,15 @@ def main():
     data = command(f'/sbin/busybox dd if={TARGET} bs={BLOCK} skip={CAPACITY // BLOCK - blocks} count={blocks}')
     args.output.mkdir(parents=True)
     (args.output / 'raw.bin').write_bytes(data)
+    header = command(f'/sbin/busybox dd if={TARGET} bs={BLOCK} count=1')
+    (args.output / 'volume-header.bin').write_bytes(header)
+    try:
+        volume = volume_info(header, CAPACITY)
+    except ValueError as error:
+        volume = {'error': str(error)}
+    (args.output / 'volume.json').write_text(json.dumps(volume, indent=2) + '\n')
     text, info = decode(data)
     (args.output / 'console.txt').write_bytes(text)
-    import json
     (args.output / 'info.json').write_text(json.dumps(info, indent=2) + '\n')
     print(f'Native console: {len(text)} bytes, flush {info["flush_sequence"]}, {args.output / "console.txt"}')
 

@@ -15,7 +15,18 @@ class TouchComTests(unittest.TestCase):
 #include <assert.h>
 #include <string.h>
 #include "xigua_tcm.h"
+#include "xigua_geni_spi.h"
+static uint32_t registers[1024];
+static void write_reg(unsigned r, uint32_t v) { assert(r/4<1024); registers[r/4]=v; }
+
 int main(void) {
+    /* Model the two interrupt gates independently: local DONE must be armed
+     * for polling, while the external route must remain masked. */
+    xigua_geni_spi_polling(write_reg);
+    unsigned done_status = 1U & registers[0x614/4];
+    unsigned external_irq = done_status && (registers[0xe1c/4] & 1);
+    assert(done_status && !external_irq && !registers[0xe18/4]);
+
     struct xigua_contact points[10] = {{0}};
     uint16_t mask = 0xffff;
     /* Finger 0 at the top left, glove 9 at the bottom right, palm 4 ignored. */
