@@ -1,3 +1,30 @@
+## Build runner brownout handled: macOS15 + verified legacy IIG cache — 2026-10-23
+
+UFS CI39994662621 never got a runner. Found official GitHub macOS14 brownout
+Oct23 14UTC-Oct24 00UTC (retirementNov2). Waiting on macos14 cannot progress.
+Workflow moved to STANDARDmacos15 (free public runner), pins Xcode16.4.
+Do NOT extendIORPC ABI just to satisfy newIIG. Instead tools/iig-legacy.py
+reuses generatedh/cpp from successfulCI39662845808 xnu-buildtree (download23MB),
+validates ALL34DriverKit sourceinputs SHA and everygeneratedfile SHA, emits17
+sameABIinterfacepairs. Everyobject is rebuilt. Local prepare of ACTUALartifact
+and generation ofIOService againstcurrentXNU source PASSEDbytecomparison.
+Workflow downloads sourceartifact, cacheslegacyIIG17pairs as90dayartifact,
+sets IIG/IIG_LEGACY_CACHE env. No old objects/kernelbinaryreused. Need newCI
+result to assess remaining Xcode16 hostcompatibility. Initialrawsourcecache
+expires7days; afterfirstsuccessfulnewCI updatebootstrap to90dayartifact.
+
+UFSmodeimplementation31fefaa awaitingkernelcompile/hardwareprobe.32hostchecks
+andEFIpackagingpassed. Added tools/collect_ufs_log.py (recoveryBusyBoxreadONLY,
+linuxpartitiontailconsole decoder) for nativeUFSboot logs. Not run onphoneyet.
+Touchadditionalfacts: actualDTcompatibleqcom,spi-geni =>Linuxspi-msm-geni.c,
+notupstreamspi-geni-qcom.c. SynapticsS3910 LBP2 normalcoordinate reports
+supported (disableHBP0x23report,setdynamicID0x11value2). GENI a90000,GPIO44-47
+mux1; TLMMnodef000000 withperGPIOcontrolbase+100000=f100000. GPIO10powerhigh,
+GPIO24resetlow10ms then80msdelay, GPIO25IRQlow. GCCbase100000:wrap1SE4clock
+vote52008bit26 andwrapperAHBbits20/21;se4halt184e4. RawcoordsappinfoLE16at32/34,
+DT19840x44352. ExistingSweetHIDtouchhardcodes1080/2400 andneedsXIGUAgeometry
+adaptation before newSPI driver. Touch not yetcoded orhardwaretested.
+
 ## User orders UFS implementation + touch if possible — 2026-10-23
 
 Explicit user instruction: DO IT, also implement touch if possible. This
