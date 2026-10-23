@@ -4,7 +4,7 @@ from pathlib import Path
 
 def apply(replace, create):
     ufs = 'bsd/dev/sweet_ufs.c'
-    for name in ['xigua_ufs_verify.h', 'xigua_ufs_diag.h', 'xigua_ufs_handoff.h']:
+    for name in ['xigua_ufs_verify.h', 'xigua_ufs_diag.h', 'xigua_ufs_handoff.h', 'xigua_ufs_ready.h']:
         create('bsd/dev/' + name, (Path(__file__).resolve().parent.parent / 'kernel' / name).read_text())
     replace(ufs, '#include <sys/param.h>', '''#include <sys/param.h>
 #if defined(ARM64_BOARD_CONFIG_XIGUA)
@@ -34,7 +34,7 @@ def apply(replace, create):
 \t{function}((addr64_t)(su.dma_pa + off), len, TRUE);
 #endif'''.lstrip())
     replace(ufs, 'static int\nufs_scsi(', '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n#include "xigua_ufs_diag.h"\n#endif\n\nstatic int\nufs_scsi(')
-    replace(ufs, '\tassert(len <= BOUNCE_SIZE);', '\tassert(len <= BOUNCE_SIZE);\n#if defined(ARM64_BOARD_CONFIG_XIGUA)\n    bzero(&xigua_ufs_last, sizeof(xigua_ufs_last));\n    xigua_ufs_last.op = cdb[0];\n    xigua_ufs_last.ocs = 0xf;\n#endif')
+    replace(ufs, '\tassert(len <= BOUNCE_SIZE);', '\tassert(len <= BOUNCE_SIZE);\n#if defined(ARM64_BOARD_CONFIG_XIGUA)\n    bzero(&xigua_ufs_last, sizeof(xigua_ufs_last));\n    xigua_ufs_last.op = cdb[0];\n    xigua_ufs_last.lun = su.lun;\n    xigua_ufs_last.ocs = 0xf;\n#endif')
     replace(ufs, '\tufs_wr(REG_IS, ufs_rd(REG_IS));         /* acknowledge completion status */', '''#if defined(ARM64_BOARD_CONFIG_XIGUA)
     xigua_ufs_last.interrupt = ufs_rd(REG_IS);
 #endif
@@ -52,7 +52,9 @@ def apply(replace, create):
     xigua_ufs_last.ascq = ucd->resp[34 + (descriptor_sense ? 3 : 13)];
 #endif''')
     replace(ufs, '\terror = ufs_take_over_host();', '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n    xigua_ufs_stage = "handoff";\n#endif\n\terror = ufs_take_over_host();')
-    replace(ufs, '\t\tstatic const uint8_t tur[6] = { 0x00 };', '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n        xigua_ufs_stage = "ready";\n#endif\n\t\tstatic const uint8_t tur[6] = { 0x00 };')
+    replace(ufs, 'static int\nufs_read_blocks(', '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n#include "xigua_ufs_ready.h"\n#endif\n\nstatic int\nufs_read_blocks(')
+    replace(ufs, '\t\tstatic const uint8_t tur[6] = { 0x00 };', '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n        error = xigua_ufs_ready();\n#else\n\t\tstatic const uint8_t tur[6] = { 0x00 };')
+    replace(ufs, '\t\tfor (int i = 0; i < 3 && (error = ufs_scsi(tur, sizeof(tur), 0, false)); i++) {\n\t\t}\n', '\t\tfor (int i = 0; i < 3 && (error = ufs_scsi(tur, sizeof(tur), 0, false)); i++) {\n\t\t}\n#endif\n')
     replace(ufs, '\t\terror = ufs_find_partition(want);', '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n        xigua_ufs_stage = "gpt";\n#endif\n\t\terror = ufs_find_partition(want);')
     replace(ufs, 'static int\nufs_take_over_host(void)', '''#if defined(ARM64_BOARD_CONFIG_XIGUA)
 #include "xigua_ufs_verify.h"

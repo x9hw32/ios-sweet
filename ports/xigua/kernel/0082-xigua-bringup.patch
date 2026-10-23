@@ -687,19 +687,20 @@
  static int
  ufs_scsi(const uint8_t *cdb, unsigned cdb_len, uint32_t len, bool write)
  {
-@@ -153,6 +186,11 @@
+@@ -153,6 +186,12 @@
  	uint64_t ucd_pa = su.dma_pa + DMA_UCD, bounce_pa = su.dma_pa + DMA_BOUNCE;
  
  	assert(len <= BOUNCE_SIZE);
 +#if defined(ARM64_BOARD_CONFIG_XIGUA)
 +    bzero(&xigua_ufs_last, sizeof(xigua_ufs_last));
 +    xigua_ufs_last.op = cdb[0];
++    xigua_ufs_last.lun = su.lun;
 +    xigua_ufs_last.ocs = 0xf;
 +#endif
  	bzero(utrd, sizeof(*utrd));
  	bzero(ucd, sizeof(*ucd));
  
-@@ -220,7 +258,7 @@
+@@ -220,7 +259,7 @@
  		uint64_t now = mach_absolute_time();
  		if (now > deadline) {
  			ufs_wr(REG_UTRLCLR, ~1u);
@@ -708,7 +709,7 @@
  			return ETIMEDOUT;
  		}
  		if (sleepable && now >= spin_until) {
-@@ -235,6 +273,9 @@
+@@ -235,6 +274,9 @@
  		}
  	}
  	__builtin_arm_dsb(0xf);
@@ -718,7 +719,7 @@
  	ufs_wr(REG_IS, ufs_rd(REG_IS));         /* acknowledge completion status */
  
  	dma_sync(DMA_UTRL, sizeof(*utrd));
-@@ -248,8 +289,19 @@
+@@ -248,8 +290,19 @@
  	}
  
  	uint32_t ocs = utrd->dw2 & 0xff;
@@ -739,7 +740,18 @@
  		    cdb[0], ocs, ucd->resp[0], ucd->resp[6], ucd->resp[7]);
  		return EIO;
  	}
-@@ -281,7 +333,7 @@
+@@ -257,6 +310,10 @@
+ }
+ 
+ /* READ(10) of count device blocks at lba into the bounce buffer. */
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++#include "xigua_ufs_ready.h"
++#endif
++
+ static int
+ ufs_read_blocks(uint64_t lba, uint32_t count)
+ {
+@@ -281,7 +338,7 @@
  	if (!su.writable || !su.nblocks || count == 0 || count > BOUNCE_SIZE / UFS_BLOCK ||
  	    lba < su.first_block || lba - su.first_block >= su.nblocks ||
  	    count > su.nblocks - (lba - su.first_block) || lba + count - 1 > UINT32_MAX) {
@@ -748,7 +760,7 @@
  		return EPERM;
  	}
  	uint8_t cdb[10] = {
-@@ -308,7 +360,7 @@
+@@ -308,7 +365,7 @@
  		return error;
  	}
  	if (memcmp(b, "EFI PART", 8) != 0) {
@@ -757,7 +769,7 @@
  		return ENXIO;
  	}
  	uint64_t entry_lba;
-@@ -316,8 +368,8 @@
+@@ -316,8 +373,8 @@
  	memcpy(&entry_lba, b + 72, 8);
  	memcpy(&nent, b + 80, 4);
  	memcpy(&esz, b + 84, 4);
@@ -768,7 +780,7 @@
  		return ENXIO;
  	}
  	error = ufs_read_blocks(entry_lba, (nent * esz + UFS_BLOCK - 1) / UFS_BLOCK);
-@@ -349,28 +401,40 @@
+@@ -349,28 +406,40 @@
  		su.nblocks = last - first + 1;
  		return 0;
  	}
@@ -813,7 +825,7 @@
  	ufs_wr(REG_IE, 0);                      /* polled operation */
  	ufs_wr(REG_IS, ufs_rd(REG_IS));
  	ufs_wr(REG_UTRLRSR, 0);
-@@ -381,10 +445,11 @@
+@@ -381,10 +450,11 @@
  	/* Never ring a doorbell unless the host uses our list. */
  	if (ufs_rd(REG_UTRLBA) != (uint32_t)list || ufs_rd(REG_UTRLBAU) != (uint32_t)(list >> 32) ||
  	    !(ufs_rd(REG_UTRLRSR) & 1)) {
@@ -826,7 +838,7 @@
  }
  
  static int
-@@ -586,19 +651,30 @@
+@@ -586,19 +656,30 @@
  static int
  sweet_ufs_init(void)
  {
@@ -858,7 +870,7 @@
  	uint32_t rw = 0;
  	PE_parse_boot_argn("ufsrw", &rw, sizeof(rw));
  	uint32_t cache = 0, wait = 0;
-@@ -608,9 +684,24 @@
+@@ -608,9 +689,24 @@
  	su.wait = (wait == 1);
  
  	su.regs = ml_io_map(reg[0], reg[1]);
@@ -884,7 +896,7 @@
  		return ENOMEM;
  	}
  	ppnum_t pn = pmap_find_phys(kernel_pmap, (addr64_t)su.dma);
-@@ -618,19 +709,32 @@
+@@ -618,19 +714,33 @@
  		return ENOMEM;
  	}
  	su.dma_pa = ptoa_64(pn);
@@ -899,12 +911,13 @@
  	error = ufs_take_over_host();
  	if (!error) {
 +#if defined(ARM64_BOARD_CONFIG_XIGUA)
-+        xigua_ufs_stage = "ready";
-+#endif
++        error = xigua_ufs_ready();
++#else
  		static const uint8_t tur[6] = { 0x00 };
  		/* The first command after the bootloader may report a unit attention. */
  		for (int i = 0; i < 3 && (error = ufs_scsi(tur, sizeof(tur), 0, false)); i++) {
  		}
++#endif
  	}
  	if (!error) {
 +#if defined(ARM64_BOARD_CONFIG_XIGUA)
@@ -917,7 +930,7 @@
  	}
  	lck_mtx_unlock(&sweet_ufs_lock);
  	if (error) {
-@@ -649,17 +753,30 @@
+@@ -649,17 +759,30 @@
  	devfs_make_node(su.bdev, DEVFS_BLOCK, UID_ROOT, GID_OPERATOR, 0640, "ufsroot0");
  	devfs_make_node(makedev(su.cmajor, 0), DEVFS_CHAR, UID_ROOT, GID_OPERATOR, 0640, "rufsroot0");
  	/* Only now, with the partition bounds known, can writes be allowed. */
@@ -949,7 +962,7 @@
  	return 0;
  }
  
-@@ -743,7 +860,7 @@
+@@ -743,7 +866,7 @@
  	uint64_t flushed = 0, seq = 0;
  	void *bounce = (void *)(su.dma + DMA_BOUNCE);
  
@@ -958,7 +971,7 @@
  	    SWEET_LOG_BLOCKS * UFS_BLOCK >> 10, base);
  	for (;;) {
  		(void)tsleep(&sweet_log_chan, PZERO, "sweetlog", hz * (int)sweet_log_secs);
-@@ -779,7 +896,7 @@
+@@ -779,7 +902,7 @@
  		}
  		lck_mtx_unlock(&sweet_ufs_lock);
  		if (error) {
@@ -1582,7 +1595,7 @@
 +#define XIGUA_UFS_DIAG_H
 +static const char *xigua_ufs_stage = "setup";
 +static struct {
-+    uint32_t op, ocs, upiu, response, status, key, asc, ascq, interrupt;
++    uint32_t op, lun, ocs, upiu, response, status, key, asc, ascq, interrupt;
 +} xigua_ufs_last;
 +void xigua_ufs_probe_fail(int error);
 +void
@@ -1593,8 +1606,8 @@
 +            ufs_rd(REG_HCE), ufs_rd(REG_HCS), ufs_rd(REG_IS),
 +            ufs_rd(REG_UTRLBAU), ufs_rd(REG_UTRLBA), ufs_rd(REG_UTRLRSR), ufs_rd(REG_UTRLDBR));
 +    }
-+    panic("XIGUA UFS: %s err=%d op=%02x ocs=%x upiu=%02x rsp=%02x st=%02x sense=%02x/%02x/%02x IS=%x",
-+        xigua_ufs_stage, error, xigua_ufs_last.op, xigua_ufs_last.ocs,
++    panic("XIGUA UFS: %s err=%d op=%02x lun=%02x ocs=%x upiu=%02x rsp=%02x st=%02x sense=%02x/%02x/%02x IS=%x",
++        xigua_ufs_stage, error, xigua_ufs_last.op, xigua_ufs_last.lun, xigua_ufs_last.ocs,
 +        xigua_ufs_last.upiu, xigua_ufs_last.response, xigua_ufs_last.status,
 +        xigua_ufs_last.key, xigua_ufs_last.asc, xigua_ufs_last.ascq, xigua_ufs_last.interrupt);
 +}
@@ -1642,6 +1655,75 @@
 +    if (ufs_rd(REG_UTRLBA) != (uint32_t)list || ufs_rd(REG_UTRLBAU) != (uint32_t)(list >> 32)) return EIO;
 +    printf("XIGUA UFS: request list takeover confirmed\n");
 +    return 0;
++}
++#endif
+--- /dev/null
++++ b/bsd/dev/xigua_ufs_ready.h
+@@ -0,0 +1,66 @@
++/* Run under sweet_ufs_lock, before exposing the disk. Firmware may leave the
++ * device stopped at ExitBootServices. UFS power conditions use START STOP UNIT
++ * on DEVICE WLUN 0xd0 (not RPMB 0xc4), with ACTIVE=1 in CDB byte 4 bits 7:4.
++ * No block writes, mode pages, format commands or link resets are issued.
++ */
++#ifndef XIGUA_UFS_READY_H
++#define XIGUA_UFS_READY_H
++static bool
++xigua_ufs_check_condition(void)
++{
++    return xigua_ufs_last.ocs == 0 && xigua_ufs_last.upiu == 0x21 &&
++        xigua_ufs_last.response <= 1 && xigua_ufs_last.status == 2;
++}
++
++static int
++xigua_ufs_activate(void)
++{
++    static const uint8_t active[6] = {0x1b, 0, 0, 0, 0x10, 0};
++    uint8_t saved_lun = su.lun;
++    int error = EIO;
++    xigua_ufs_stage = "activate";
++    su.lun = 0xd0;
++    for (unsigned attempt = 0; attempt < 3; attempt++) {
++        error = ufs_scsi(active, sizeof(active), 0, false);
++        if (!error || !xigua_ufs_check_condition() || xigua_ufs_last.key != 6) break;
++        delay(10000);
++    }
++    su.lun = saved_lun;
++    return error;
++}
++
++static int
++xigua_ufs_ready(void)
++{
++    static const uint8_t tur[6] = {0};
++    bool activated = false;
++    unsigned attentions = 0;
++    uint64_t deadline = 0;
++    for (;;) {
++        xigua_ufs_stage = activated ? "ready-wait" : "ready";
++        int error = ufs_scsi(tur, sizeof(tur), 0, false);
++        if (!error) return 0;
++        if (!xigua_ufs_check_condition()) return error;
++        if (xigua_ufs_last.key == 6) {
++            if (++attentions >= 3) return error;
++            delay(10000);
++            continue;
++        }
++        if (xigua_ufs_last.key != 2 || xigua_ufs_last.asc != 4 ||
++            (xigua_ufs_last.ascq != 1 && xigua_ufs_last.ascq != 2)) return error;
++        if (!activated && xigua_ufs_last.ascq == 2) {
++            printf("XIGUA UFS: NOT READY 04/02; activating DEVICE WLUN d0\n");
++            error = xigua_ufs_activate();
++            if (error) return error;
++            activated = true;
++        }
++        if (!deadline) {
++            nanoseconds_to_absolutetime(2 * NSEC_PER_SEC, &deadline);
++            deadline += mach_absolute_time();
++        }
++        xigua_ufs_stage = "ready-wait";
++        if (mach_absolute_time() >= deadline) return ETIMEDOUT;
++        delay(100000);
++    }
 +}
 +#endif
 --- /dev/null

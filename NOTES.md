@@ -1,3 +1,24 @@
+## Probe2 isolates NOT READY 02/04/02; DEVICE WLUN activation added — 2026-10-23
+
+USER EXACT PANIC: ready err5 op00 ocs0 upiu21 rsp01 st02 sense02/04/02 IS1.
+Saved diagnostics/ufs-probe-2-result.json. Handoff and descriptor/response DMA
+worked enough to exchange TEST UNIT READY with device. DATA READS/CRCs not yet
+verified. Failure is CHECK CONDITION, NOT READY / LOGICAL UNIT NOT READY,
+INITIALIZING COMMAND REQUIRED. Do not assume changing DMA/PHY/SMMU is needed.
+
+Added kernel/xigua_ufs_ready.h: retain alreadyready path; on specific02/04/02
+send UFS START STOP UNIT ACTIVE (1b 00 00 00 10 00) to DEVICE WLUN0xd0, NOT
+RPMB0xc4, temporarily restore su.lun=0 on everyexit. Matches OnePlus Linux
+ufshcd_set_dev_pwr_mode with ACTIVE1 inCDBbyte4highnibble. Filtered bounded
+UNIT ATTENTION retries and2sec readywait for04/01 or04/02, no retries forDMA/
+illegalrequest/manualintervention errors. No mediawrite/format/modepages or
+linkreset. Finalpanic now includescommandLUN andactivation/readinessstage.
+Hosttest uses EXACTphone response, checks SSU targetCDB, alreadyready path,
+activationUA/reject, restoredLUN, nonretryable errors andboundedwait.
+35hosttests PASS; fullUFS C localARM64compilePASS. Need remoteCI thenprobe3.
+Touch remainsOFF during UFS tests. Phone had noADB; user asked to reboot to
+recovery while building. Do not enable nativeUFSRW before actualCRC PASS.
+
 ## Diagnostic UFS probe2 SENT to phone — 2026-10-23
 
 KernelCI40001017670 SUCCESS commit78a86f2, verified SHA
