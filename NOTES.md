@@ -1,3 +1,19 @@
+## Black-screen log read: display OFF without ON, repeated SpringBoard starts — 2026-10-24
+
+Read actual diagnostics/ios-black-20261023T204020-66424/console.txt (852530B).
+Touch confirmed IN FULL IOS: TCM1 mode1, S3910 raw12399x27719, coordinate
+reports incl release. Display ON L2388, OFF L2489, NO subsequent ON anywhere
+in log. Thus screen-off state is confirmed; missing physical wake keys matter.
+SpringBoard sampled PIDs344,545,744,958,1172,1410,1621,1832 demonstrate repeated
+instances. Exact termination cause UNKNOWN (no explicit exit reason found).
+No kernel panic string. Initial UFS TUR condition is followed by root mount;
+not evidence of root I/O failure. Header free58519552B (~56MiB), VeryLowDisk,
+no ENOSPC line. Many unrelated daemon crashes; do not disable them blindly.
+Private confirmed-findings.json saved. Existing visible-console debug image
+is diagnostics ONLY; it does not bypass framebuffer display-off. Next fix
+should address power/wake or guarded bring-up always-on, and investigate
+SpringBoard termination. No new phone writes or new kernel changes this turn.
+
 ## Full iOS touch3 USER reports black after Apple; cause UNKNOWN — 2026-10-23
 
 User installed/booted native ios-touch3 themselves and reports black after
