@@ -1,3 +1,26 @@
+## Diagnostic UFS probe2 SENT to phone — 2026-10-23
+
+KernelCI40001017670 SUCCESS commit78a86f2, verified SHA
+ ec0167e191760a1bf96c67a85d62fa837702c32c393c56735545453edfbd13d5.
+Actualkernelstrings/symbols confirm xigua_ufs_probe_fail andlinkedtouchdriver;
+MMIO/DSB disassembly saved build/ufs-handoff-ci-40001017670.asm.
+Built out/phone-ufs-probe-2 and out/efi-ufs-probe-2. ESP SHA
+995069b76bbbdc87f257f6da1bbf3d6f259692b53b52af7cd83674a85c7b11fd.
+ADB Android -> recovery. Backed up probe1 ESP in
+ diagnostics/ios-before-ufs-probe-2, restoredoriginal, installedprobe2 through
+recoveryBusyBoxdd and FULL SHA readback VERIFIED. Logs diagnostics/
+ios-before-ufs-probe-2.log, ufs-probe-2-esp-install.log, ufs-probe-2-boot.txt/json.
+TemporaryMu fastbootboot Sending/Booting OKAY. CPU6, UFSREADONLY mode1,
+no12GiB preload, tinyRAMroot, touchOFF. NEW SCREEN RESULT PENDING.
+If newpanic, finalmessage carriesstage/op/ocs/upiu/rsp/st/sense/IS; getthisline.
+If initrunningPID1 appears, IOFindBSDRoot's probe returnedwithoutfailure, but
+obtain READ CHECK PASS observation to confirmchecks explicitly. Do not enable
+nativeUFSRW untilverifiedreadpass. Do not reboot whileawaitingobservation.
+
+Touch implementation compiled SUCCESS in39999855589 and40001017670; input
+hardware remainsUNTESTED, keepseparatetest afterUFS. All34hostchecksPASS,
+updatedUFSdriver localARM64compilePASS. NoQEMU andnobootpartitionwrites.
+
 ## Active build continuation — 2026-10-23 18:12 UTC
 
 Currentcandidate78a86f2, kernelCI40001017670 inprogress; fetchdaemon
