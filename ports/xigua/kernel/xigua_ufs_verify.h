@@ -27,6 +27,9 @@ xigua_ufs_verify(DTEntry node, bool full_probe)
         printf("XIGUA UFS: linux partition geometry mismatch\n");
         return ENXIO;
     }
+#ifdef XIGUA_UFS_DIAG_H
+    xigua_ufs_stage = "root-header";
+#endif
     int error = ufs_read_blocks(su.first_block, 1);
     if (error) return error;
     const uint8_t *header = (const uint8_t *)(su.dma + DMA_BOUNCE + 1024);
@@ -43,6 +46,9 @@ xigua_ufs_verify(DTEntry node, bool full_probe)
         offset_size != 3 * sizeof(uint64_t) || crc_size != 3 * sizeof(uint32_t)) {
         return EINVAL;
     }
+#ifdef XIGUA_UFS_DIAG_H
+    xigua_ufs_stage = "root-crc";
+#endif
     for (unsigned sample = 0; sample < 3; sample++) {
         uint64_t offset;
         uint32_t expected;

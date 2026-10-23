@@ -627,7 +627,7 @@
  
  static LCK_GRP_DECLARE(sweet_ufs_grp, "sweet_ufs");
  static LCK_MTX_DECLARE(sweet_ufs_lock, &sweet_ufs_grp);
-@@ -120,25 +127,47 @@
+@@ -120,31 +127,57 @@
  static inline uint32_t
  ufs_rd(uint32_t off)
  {
@@ -677,7 +677,29 @@
  }
  
  /*
-@@ -220,7 +249,7 @@
+  * One SCSI command in slot 0, data (if any) to/from the bounce buffer
+  * (to the device when write is set). Returns 0 or an errno.
+  */
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++#include "xigua_ufs_diag.h"
++#endif
++
+ static int
+ ufs_scsi(const uint8_t *cdb, unsigned cdb_len, uint32_t len, bool write)
+ {
+@@ -153,6 +186,11 @@
+ 	uint64_t ucd_pa = su.dma_pa + DMA_UCD, bounce_pa = su.dma_pa + DMA_BOUNCE;
+ 
+ 	assert(len <= BOUNCE_SIZE);
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    bzero(&xigua_ufs_last, sizeof(xigua_ufs_last));
++    xigua_ufs_last.op = cdb[0];
++    xigua_ufs_last.ocs = 0xf;
++#endif
+ 	bzero(utrd, sizeof(*utrd));
+ 	bzero(ucd, sizeof(*ucd));
+ 
+@@ -220,7 +258,7 @@
  		uint64_t now = mach_absolute_time();
  		if (now > deadline) {
  			ufs_wr(REG_UTRLCLR, ~1u);
@@ -686,16 +708,38 @@
  			return ETIMEDOUT;
  		}
  		if (sleepable && now >= spin_until) {
-@@ -249,7 +278,7 @@
+@@ -235,6 +273,9 @@
+ 		}
+ 	}
+ 	__builtin_arm_dsb(0xf);
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    xigua_ufs_last.interrupt = ufs_rd(REG_IS);
++#endif
+ 	ufs_wr(REG_IS, ufs_rd(REG_IS));         /* acknowledge completion status */
+ 
+ 	dma_sync(DMA_UTRL, sizeof(*utrd));
+@@ -248,8 +289,19 @@
+ 	}
  
  	uint32_t ocs = utrd->dw2 & 0xff;
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    xigua_ufs_last.ocs = ocs;
++    xigua_ufs_last.upiu = ucd->resp[0];
++    xigua_ufs_last.response = ucd->resp[6];
++    xigua_ufs_last.status = ucd->resp[7];
++    unsigned sense_code = ucd->resp[34] & 0x7f;
++    bool descriptor_sense = sense_code == 0x72 || sense_code == 0x73;
++    xigua_ufs_last.key = ucd->resp[34 + (descriptor_sense ? 1 : 2)] & 15;
++    xigua_ufs_last.asc = ucd->resp[34 + (descriptor_sense ? 2 : 12)];
++    xigua_ufs_last.ascq = ucd->resp[34 + (descriptor_sense ? 3 : 13)];
++#endif
  	if (ocs || ucd->resp[0] != 0x21 || ucd->resp[6] || ucd->resp[7]) {
 -		printf("SWEET UFS: command 0x%02x failed: ocs 0x%x upiu 0x%x response 0x%x status 0x%x\n",
 +		printf(ARM_BOARD_NAME " UFS: command 0x%02x failed: ocs 0x%x upiu 0x%x response 0x%x status 0x%x\n",
  		    cdb[0], ocs, ucd->resp[0], ucd->resp[6], ucd->resp[7]);
  		return EIO;
  	}
-@@ -281,7 +310,7 @@
+@@ -281,7 +333,7 @@
  	if (!su.writable || !su.nblocks || count == 0 || count > BOUNCE_SIZE / UFS_BLOCK ||
  	    lba < su.first_block || lba - su.first_block >= su.nblocks ||
  	    count > su.nblocks - (lba - su.first_block) || lba + count - 1 > UINT32_MAX) {
@@ -704,7 +748,7 @@
  		return EPERM;
  	}
  	uint8_t cdb[10] = {
-@@ -308,7 +337,7 @@
+@@ -308,7 +360,7 @@
  		return error;
  	}
  	if (memcmp(b, "EFI PART", 8) != 0) {
@@ -713,7 +757,7 @@
  		return ENXIO;
  	}
  	uint64_t entry_lba;
-@@ -316,8 +345,8 @@
+@@ -316,8 +368,8 @@
  	memcpy(&entry_lba, b + 72, 8);
  	memcpy(&nent, b + 80, 4);
  	memcpy(&esz, b + 84, 4);
@@ -724,7 +768,7 @@
  		return ENXIO;
  	}
  	error = ufs_read_blocks(entry_lba, (nent * esz + UFS_BLOCK - 1) / UFS_BLOCK);
-@@ -349,25 +378,33 @@
+@@ -349,28 +401,40 @@
  		su.nblocks = last - first + 1;
  		return 0;
  	}
@@ -735,6 +779,7 @@
  
 +#if defined(ARM64_BOARD_CONFIG_XIGUA)
 +#include "xigua_ufs_verify.h"
++#include "xigua_ufs_handoff.h"
 +#endif
 +
  static int
@@ -762,7 +807,13 @@
  		    su.dma_pa);
  		return ENXIO;
  	}
-@@ -381,7 +418,7 @@
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    return xigua_ufs_handoff_start();
++#else
+ 	ufs_wr(REG_IE, 0);                      /* polled operation */
+ 	ufs_wr(REG_IS, ufs_rd(REG_IS));
+ 	ufs_wr(REG_UTRLRSR, 0);
+@@ -381,10 +445,11 @@
  	/* Never ring a doorbell unless the host uses our list. */
  	if (ufs_rd(REG_UTRLBA) != (uint32_t)list || ufs_rd(REG_UTRLBAU) != (uint32_t)(list >> 32) ||
  	    !(ufs_rd(REG_UTRLRSR) & 1)) {
@@ -771,7 +822,11 @@
  		return EIO;
  	}
  	return 0;
-@@ -586,19 +623,30 @@
++#endif
+ }
+ 
+ static int
+@@ -586,19 +651,30 @@
  static int
  sweet_ufs_init(void)
  {
@@ -803,7 +858,7 @@
  	uint32_t rw = 0;
  	PE_parse_boot_argn("ufsrw", &rw, sizeof(rw));
  	uint32_t cache = 0, wait = 0;
-@@ -608,9 +656,24 @@
+@@ -608,9 +684,24 @@
  	su.wait = (wait == 1);
  
  	su.regs = ml_io_map(reg[0], reg[1]);
@@ -829,7 +884,7 @@
  		return ENOMEM;
  	}
  	ppnum_t pn = pmap_find_phys(kernel_pmap, (addr64_t)su.dma);
-@@ -618,6 +681,7 @@
+@@ -618,19 +709,32 @@
  		return ENOMEM;
  	}
  	su.dma_pa = ptoa_64(pn);
@@ -837,9 +892,24 @@
  	su.lun = 0;
  	su.secsize = DEV_BSIZE;
  
-@@ -631,6 +695,9 @@
+ 	lck_mtx_lock(&sweet_ufs_lock);
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++    xigua_ufs_stage = "handoff";
++#endif
+ 	error = ufs_take_over_host();
+ 	if (!error) {
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++        xigua_ufs_stage = "ready";
++#endif
+ 		static const uint8_t tur[6] = { 0x00 };
+ 		/* The first command after the bootloader may report a unit attention. */
+ 		for (int i = 0; i < 3 && (error = ufs_scsi(tur, sizeof(tur), 0, false)); i++) {
+ 		}
  	}
  	if (!error) {
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++        xigua_ufs_stage = "gpt";
++#endif
  		error = ufs_find_partition(want);
 +#if defined(ARM64_BOARD_CONFIG_XIGUA)
 +        if (!error) error = xigua_ufs_verify(node, xigua_ufs_mode == 1);
@@ -847,7 +917,7 @@
  	}
  	lck_mtx_unlock(&sweet_ufs_lock);
  	if (error) {
-@@ -649,17 +716,30 @@
+@@ -649,17 +753,30 @@
  	devfs_make_node(su.bdev, DEVFS_BLOCK, UID_ROOT, GID_OPERATOR, 0640, "ufsroot0");
  	devfs_make_node(makedev(su.cmajor, 0), DEVFS_CHAR, UID_ROOT, GID_OPERATOR, 0640, "rufsroot0");
  	/* Only now, with the partition bounds known, can writes be allowed. */
@@ -879,7 +949,7 @@
  	return 0;
  }
  
-@@ -743,7 +823,7 @@
+@@ -743,7 +860,7 @@
  	uint64_t flushed = 0, seq = 0;
  	void *bounce = (void *)(su.dma + DMA_BOUNCE);
  
@@ -888,7 +958,7 @@
  	    SWEET_LOG_BLOCKS * UFS_BLOCK >> 10, base);
  	for (;;) {
  		(void)tsleep(&sweet_log_chan, PZERO, "sweetlog", hz * (int)sweet_log_secs);
-@@ -779,7 +859,7 @@
+@@ -779,7 +896,7 @@
  		}
  		lck_mtx_unlock(&sweet_ufs_lock);
  		if (error) {
@@ -1504,8 +1574,79 @@
 +}
 +#endif
 --- /dev/null
++++ b/bsd/dev/xigua_ufs_diag.h
+@@ -0,0 +1,23 @@
++/* Keep the failed stage and response in the final panic, even after the
++ * framebuffer scrolls away the initial host/SCSI messages. No disk writes. */
++#ifndef XIGUA_UFS_DIAG_H
++#define XIGUA_UFS_DIAG_H
++static const char *xigua_ufs_stage = "setup";
++static struct {
++    uint32_t op, ocs, upiu, response, status, key, asc, ascq, interrupt;
++} xigua_ufs_last;
++void xigua_ufs_probe_fail(int error);
++void
++xigua_ufs_probe_fail(int error)
++{
++    if (su.regs) {
++        printf("XIGUA UFS: failure host HCE=%x HCS=%x IS=%x list=%x:%08x RSR=%x DBR=%x\n",
++            ufs_rd(REG_HCE), ufs_rd(REG_HCS), ufs_rd(REG_IS),
++            ufs_rd(REG_UTRLBAU), ufs_rd(REG_UTRLBA), ufs_rd(REG_UTRLRSR), ufs_rd(REG_UTRLDBR));
++    }
++    panic("XIGUA UFS: %s err=%d op=%02x ocs=%x upiu=%02x rsp=%02x st=%02x sense=%02x/%02x/%02x IS=%x",
++        xigua_ufs_stage, error, xigua_ufs_last.op, xigua_ufs_last.ocs,
++        xigua_ufs_last.upiu, xigua_ufs_last.response, xigua_ufs_last.status,
++        xigua_ufs_last.key, xigua_ufs_last.asc, xigua_ufs_last.ascq, xigua_ufs_last.interrupt);
++}
++#endif
+--- /dev/null
++++ b/bsd/dev/xigua_ufs_handoff.h
+@@ -0,0 +1,42 @@
++/* Switch only the legacy request list. Keep PHY, link, clocks and LUN state
++ * initialized by firmware. RSR state changes may be asynchronous. */
++#ifndef XIGUA_UFS_HANDOFF_H
++#define XIGUA_UFS_HANDOFF_H
++static int
++xigua_ufs_handoff_start(void)
++{
++    ufs_wr(REG_IE, 0);
++    ufs_wr(REG_IS, ufs_rd(REG_IS));
++    xigua_ufs_stage = "handoff-stop";
++    ufs_wr(REG_UTRLRSR, 0);
++    __builtin_arm_dsb(0xf);
++    uint64_t deadline;
++    nanoseconds_to_absolutetime(100 * NSEC_PER_MSEC, &deadline);
++    deadline += mach_absolute_time();
++    while (ufs_rd(REG_UTRLRSR) & 1) {
++        if (mach_absolute_time() > deadline) return EBUSY;
++        delay(1);
++    }
++    if (ufs_rd(REG_UTRLDBR)) return EBUSY;
++
++    xigua_ufs_stage = "handoff-base";
++    uint64_t list = su.dma_pa + DMA_UTRL;
++    ufs_wr(REG_UTRLBA, (uint32_t)list);
++    ufs_wr(REG_UTRLBAU, (uint32_t)(list >> 32));
++    __builtin_arm_dsb(0xf);
++    if (ufs_rd(REG_UTRLBA) != (uint32_t)list || ufs_rd(REG_UTRLBAU) != (uint32_t)(list >> 32)) return EIO;
++
++    xigua_ufs_stage = "handoff-run";
++    ufs_wr(REG_UTRLRSR, 1);
++    __builtin_arm_dsb(0xf);
++    nanoseconds_to_absolutetime(100 * NSEC_PER_MSEC, &deadline);
++    deadline += mach_absolute_time();
++    while (!(ufs_rd(REG_UTRLRSR) & 1)) {
++        if (mach_absolute_time() > deadline) return EIO;
++        delay(1);
++    }
++    if (ufs_rd(REG_UTRLBA) != (uint32_t)list || ufs_rd(REG_UTRLBAU) != (uint32_t)(list >> 32)) return EIO;
++    printf("XIGUA UFS: request list takeover confirmed\n");
++    return 0;
++}
++#endif
+--- /dev/null
 +++ b/bsd/dev/xigua_ufs_verify.h
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,73 @@
 +/* XIGUA's allocated linux partition; included after the generic read helper.
 + * Probe mode reads three independently checksummed 4 MiB regions. Root mode
 + * permits a filesystem changed by previous iOS boots, so checks its header.
@@ -1535,6 +1676,9 @@
 +        printf("XIGUA UFS: linux partition geometry mismatch\n");
 +        return ENXIO;
 +    }
++#ifdef XIGUA_UFS_DIAG_H
++    xigua_ufs_stage = "root-header";
++#endif
 +    int error = ufs_read_blocks(su.first_block, 1);
 +    if (error) return error;
 +    const uint8_t *header = (const uint8_t *)(su.dma + DMA_BOUNCE + 1024);
@@ -1551,6 +1695,9 @@
 +        offset_size != 3 * sizeof(uint64_t) || crc_size != 3 * sizeof(uint32_t)) {
 +        return EINVAL;
 +    }
++#ifdef XIGUA_UFS_DIAG_H
++    xigua_ufs_stage = "root-crc";
++#endif
 +    for (unsigned sample = 0; sample < 3; sample++) {
 +        uint64_t offset;
 +        uint32_t expected;
@@ -2707,7 +2854,7 @@
      "   {"
 --- a/iokit/bsddev/IOKitBSDInit.cpp
 +++ b/iokit/bsddev/IOKitBSDInit.cpp
-@@ -770,6 +770,18 @@
+@@ -770,6 +770,19 @@
  //
  //	SWEET: root on a GPT partition of the internal UFS (bsd/dev/sweet_ufs.c)
  //
@@ -2720,7 +2867,8 @@
 +        extern int sweet_ufs_rootdev(dev_t *dev);
 +        dev_t probe_device;
 +        int probe_error = sweet_ufs_rootdev(&probe_device);
-+        if (probe_error) panic("XIGUA UFS: read-only probe failed: %d", probe_error);
++        extern void xigua_ufs_probe_fail(int error);
++        if (probe_error) xigua_ufs_probe_fail(probe_error);
 +    }
 +#endif
  	if (strcmp(rdBootVar, "ufsroot0") == 0) {

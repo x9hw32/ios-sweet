@@ -4,8 +4,8 @@ from pathlib import Path
 
 def apply(replace, create):
     ufs = 'bsd/dev/sweet_ufs.c'
-    create('bsd/dev/xigua_ufs_verify.h',
-           (Path(__file__).resolve().parent.parent / 'kernel/xigua_ufs_verify.h').read_text())
+    for name in ['xigua_ufs_verify.h', 'xigua_ufs_diag.h', 'xigua_ufs_handoff.h']:
+        create('bsd/dev/' + name, (Path(__file__).resolve().parent.parent / 'kernel' / name).read_text())
     replace(ufs, '#include <sys/param.h>', '''#include <sys/param.h>
 #if defined(ARM64_BOARD_CONFIG_XIGUA)
 #include <pexpert/arm64/XiguaMMIO.h>
@@ -33,8 +33,30 @@ def apply(replace, create):
 #else
 \t{function}((addr64_t)(su.dma_pa + off), len, TRUE);
 #endif'''.lstrip())
+    replace(ufs, 'static int\nufs_scsi(', '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n#include "xigua_ufs_diag.h"\n#endif\n\nstatic int\nufs_scsi(')
+    replace(ufs, '\tassert(len <= BOUNCE_SIZE);', '\tassert(len <= BOUNCE_SIZE);\n#if defined(ARM64_BOARD_CONFIG_XIGUA)\n    bzero(&xigua_ufs_last, sizeof(xigua_ufs_last));\n    xigua_ufs_last.op = cdb[0];\n    xigua_ufs_last.ocs = 0xf;\n#endif')
+    replace(ufs, '\tufs_wr(REG_IS, ufs_rd(REG_IS));         /* acknowledge completion status */', '''#if defined(ARM64_BOARD_CONFIG_XIGUA)
+    xigua_ufs_last.interrupt = ufs_rd(REG_IS);
+#endif
+\tufs_wr(REG_IS, ufs_rd(REG_IS));         /* acknowledge completion status */''')
+    replace(ufs, '\tuint32_t ocs = utrd->dw2 & 0xff;', '''\tuint32_t ocs = utrd->dw2 & 0xff;
+#if defined(ARM64_BOARD_CONFIG_XIGUA)
+    xigua_ufs_last.ocs = ocs;
+    xigua_ufs_last.upiu = ucd->resp[0];
+    xigua_ufs_last.response = ucd->resp[6];
+    xigua_ufs_last.status = ucd->resp[7];
+    unsigned sense_code = ucd->resp[34] & 0x7f;
+    bool descriptor_sense = sense_code == 0x72 || sense_code == 0x73;
+    xigua_ufs_last.key = ucd->resp[34 + (descriptor_sense ? 1 : 2)] & 15;
+    xigua_ufs_last.asc = ucd->resp[34 + (descriptor_sense ? 2 : 12)];
+    xigua_ufs_last.ascq = ucd->resp[34 + (descriptor_sense ? 3 : 13)];
+#endif''')
+    replace(ufs, '\terror = ufs_take_over_host();', '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n    xigua_ufs_stage = "handoff";\n#endif\n\terror = ufs_take_over_host();')
+    replace(ufs, '\t\tstatic const uint8_t tur[6] = { 0x00 };', '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n        xigua_ufs_stage = "ready";\n#endif\n\t\tstatic const uint8_t tur[6] = { 0x00 };')
+    replace(ufs, '\t\terror = ufs_find_partition(want);', '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n        xigua_ufs_stage = "gpt";\n#endif\n\t\terror = ufs_find_partition(want);')
     replace(ufs, 'static int\nufs_take_over_host(void)', '''#if defined(ARM64_BOARD_CONFIG_XIGUA)
 #include "xigua_ufs_verify.h"
+#include "xigua_ufs_handoff.h"
 #endif
 
 static int
@@ -44,6 +66,8 @@ ufs_take_over_host(void)''')
     printf("XIGUA UFS: HCE=%x HCS=%x CAP=%x VER=%x DMA=0x%llx\\n",
         hce, hcs, ufs_rd(REG_CAP), ufs_rd(0x08), su.dma_pa);
 #endif''')
+    replace(ufs, '\tufs_wr(REG_IE, 0);                      /* polled operation */', '#if defined(ARM64_BOARD_CONFIG_XIGUA)\n    return xigua_ufs_handoff_start();\n#else\n\tufs_wr(REG_IE, 0);                      /* polled operation */')
+    replace(ufs, '\treturn 0;\n}\n\nstatic int\nsweet_ufs_open', '\treturn 0;\n#endif\n}\n\nstatic int\nsweet_ufs_open')
     replace(ufs, 'sweet_ufs_init(void)\n{\n', '''sweet_ufs_init(void)
 {
 #if defined(ARM64_BOARD_CONFIG_XIGUA)
@@ -110,7 +134,8 @@ ufs_take_over_host(void)''')
         extern int sweet_ufs_rootdev(dev_t *dev);
         dev_t probe_device;
         int probe_error = sweet_ufs_rootdev(&probe_device);
-        if (probe_error) panic("XIGUA UFS: read-only probe failed: %d", probe_error);
+        extern void xigua_ufs_probe_fail(int error);
+        if (probe_error) xigua_ufs_probe_fail(probe_error);
     }
 #endif
 \tif (strcmp(rdBootVar, "ufsroot0") == 0) {''')

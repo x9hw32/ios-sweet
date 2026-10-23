@@ -1,3 +1,29 @@
+## UFS probe1 FAILED EIO on phone; diagnostic probe2 prepared — 2026-10-23
+
+User saw panic(cpu0): XIGUA UFS read-only probe failed:5 atIOKitBSDInit.cpp780.
+NO READ CHECK PASS. User manually rebooted before earlierhost/SCSI lines could
+be read; now ADB Android (ro.bootmode smpl). Do not enable nativeUFS RW.
+out/efi-ios-ufs-1 was prepared only; NEVER installed, currentESP remainsprobe1.
+Actual stage remains UNKNOWN: EIO can mean listreadback, SCSI/OCS, or CRC.
+
+Added finalpanic diagnostics with stage (handoff-stop/base/run,ready,gpt,
+root-header,root-crc), command, OCS, UPIU response/status, fixed/descriptor sense,
+and savedinterruptstatus. Failurehostregisters printed beforepanic.
+Added explicit100ms handshake polling for async RSR stop/start andlistreadback
+barriers; noPHY/linkreset, noSMMUreconfiguration ordiskwrites. Actualheader
+xigua_ufs_handoff.h hosttested against delayedcontroller model plus stuckstop,
+ignoredbase,stuckstart,outstandingDBR. 34hostchecks PASS; entireupdatedUFS C
+crosscompile against realXNU ARM64 headers PASS (build/ufs-local-compile-2.log).
+Need compile newkernel, build/install probe2, read finaldiagnostic iffailure.
+
+Touchcandidate9ae4474 CI39999855589 BUILD SUCCESS incl HID C++/driver. This is
+compile evidence only, touchOFF in UFSprobe1 and NOT hardwaretested. Need not
+switch phone to a touchtest while UFS remains activepriority. 90daylegacyIIG
+artifact bootstrap verified by thisCI too. Android read-onlyUFSreference:
+diagnostics/android-ufs-reference-1.txt and android-ufs-qcom-1.txt. IOMMUgroup3
+unmanaged, physicalSMMU15000000; no changes made. No inference that firmware's
+IOMMU state matchesAndroid. LUN0driverflow still needs actual error values.
+
 ## UFS kernel39997597747 compiled and read-only probe SENT; touch candidate — 2026-10-23
 
 macos15/Xcode16.4 + legacyIIG source cache BUILD SUCCESS. Commit496e2e7,
