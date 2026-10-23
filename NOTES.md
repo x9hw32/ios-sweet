@@ -1,3 +1,35 @@
+## Physical keys kernel installed and temporary Mu boot OKAY — 2026-10-24
+
+KernelCI40038203873 SUCCESS, commit256f2e446a41d50bb07d3ff2dc864889503f2ed6.
+ZIP CRC+SHA verified, kernel
+132b44f5281136507de631497e8568c241f0dd20bfe5d3aceeaa58b208b69727.
+Actual linked binary contains XIGUA KEYS arb/key and touch report strings.
+42hosttests and new keys.c real-XNU-header ARM64 compile PASS,0082apply PASS.
+
+Built out/phone-ios-ufs-keys-1 and out/efi-ios-ufs-keys-1/esp.img. Native existing
+linux RW root, CPU6,fit60 cap,touchON,physicalkeysON,sampler SB/backboardd/lsd,
+console muted afterGUI. Payload confirms rd=ufsroot0 and xiguakeys1. No tapwake
+prototype remains. Read-only v7 SPMI observer driver, new bits/offsets per DT.
+
+Saved previous ESP to diagnostics/ios-before-physical-keys-1, restoredoriginal,
+installed new96MiB ESP with recoveryBusyBoxdd and full readbackSHAverified:
+2ead6fae277408e9af14ee3fa0ca0b707f66ceb070970e7133ed8f88ce7f5efa.
+TemporaryMu fastbootboot Sending/Booting OKAY at 2026-10-23T23:20:09.080086+00:00.
+Receipts diagnostics/physical-keys-1-{boot.json,boot.txt,install.json}.
+Phone is now booting native iOS with buttons. USER RESULT PENDING via async:
+short Power when black, then bothvolume; no manual log transcription needed.
+If fail, user returns recovery and agent captures persistent console before
+next XNU boot; look for XIGUA KEYS version/APIDs/subtype/error and key edges.
+Do NOT claim physical keys working until hardware evidence. Recovery Linux
+getevent attempts contained device names but no presses; mappings followactual
+DT linuxcodes. Previous fresh black log preserved at ios-black-20261023T230300-91318.
+All three main threads include Mach message waits; SB's further resolved frames
+are dispatch_mach_send_and_wait_for_reply -> XPC synchronous reply -> NSXPC,
+not enough to identify the target service. No unrelated userland fixes made.
+
+Local IOS_TOUCH_READY.md now points at this candidate and install.sh for repeat
+use. No Android/boot partition writes or root-image rewrite. No local QEMU.
+
 ## Physical Power/Volume candidate ready, user prioritizes actual buttons — 2026-10-24
 
 Latest recovery console saved BEFORE any new boot in diagnostics/
