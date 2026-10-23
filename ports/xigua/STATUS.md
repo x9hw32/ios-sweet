@@ -1,3 +1,65 @@
+## Buttons read on hardware; SpringBoard activation wait identified and patched — 2026-10-24
+
+USER: no screen reaction to physical buttons, supplied github.com/oosexgang.
+Captured latest console in recovery BEFORE changes:
+diagnostics/ios-black-20261023T232657-95701 (239967B,23flush,1sample).
+ACTUAL KEY HARDWARE PASS: arb70000001/APIDs768, PON APID560 subtype9,
+GPIO6 APID583 subtype13 mode0 EN80, no errors. All Power/Up/Down presses AND
+releases logged, delivered to HID usages30/e9/ea (1client). Thus physical
+input works; screen reaction is still unconfirmed. OFF without subsequent ON.
+
+Resolved65 frame addresses using actual20H392 shared cache and ASLR. SB main:
+MadGate getActivationState -> MAEGetActivationStateWithError ->
+SBLockdownManager _setupActivationState/lockdownState/brickedDevice -> syncXPC.
+mobileactivationd crashes11times. Actual binary PCunslid1001bf3bc = BRK after
+"Migration failed." (NOT a dyld symbol error: namespace2 is SIGNAL).
+Current data_ark.plist is EMPTY0B; first successful native snapshot has a valid
+459B plist. Current mobileactivationd and cache.21 byte-for-byte match baseline.
+Private resolved-stacks.txt and symbols.json saved in latest diagnostic folder.
+
+New external references pinned/read ONLY, never executed their scripts:
+oosexgang/hackios-xnu-kernel d82c64a3a31cd27a0a0afbf6e213e467e44b1b4c;
+hackios-xnu-userland a79ff0772a3454fd1ef127e181e5b3bce6c9ce18,
+userland/src/inject_sb.c implements local _setupActivationState state2 for
+unsupported Android port. Their redwood hardware and iOS16.5 addresses cannot
+be copied as PJA110 drivers. Adapted only that local SpringBoard state handling.
+
+Preserved CURRENT12GiB root read-only at diagnostics/ios-keys-1-root-snapshot/
+root.img, full SOURCE SHAverified:
+eca0accb6486270000d7ab42a6f15275057c6672d6080ab828e77a9ac3457fc4.
+Capture resumed at4MiB boundary after360stimeout; stripped ONLY recognized
+remote BusyBox dd summary trailer96B, then full host/source SHAmatched.
+All host HFS mounts unmounted before device writes. No phone mounts.
+
+New tools/prepare_activation_patch.py verifies exact352B methodSHA
+ aa0562b1d3fbabcc43e0183dadd575047d3e5ad529d402456bfd3d7bbf3c204e
+at cache.21 offset2c41a78 (VM1c5991a78); actual disassembly proves state+8,
+busybyte+12. Replaces first16B with mov w8,2;str w8,[x0,8];strb wzr,[x0,12];ret.
+Repairs existing ADHOC SHA256 CodeDirectory hash for the changed16KiB codepage.
+Requires original hash match. Read-only HFS FIBMAP maps affected file sectors
+to current root; source raw sectors compared before producing a plan.
+45hosttests PASS incl synthetic codehash/geometry/refusal cases.
+
+Applied EXACT2x4096B sectors via recovery BusyBoxdd to allocated linux, no
+filesystem metadata/other partition writes; both readbacks verified. Prepared
+original/patched sectors and receipt at out/activation-state-1. physical blocks
+2504308 and2521053 (PRIVATE receipt, recalculate for any other filesystem).
+Original cacheSHA2f30d9a7e954f4f9aac6feee71da395e09b34544183a040ae38161e9e007222f;
+patched5e40ee14ceb3016ad281d52187ee9ada2eb59be12d5dffead76a3375b23aaac5.
+Restore ONLY this patch with python3 tools/apply_activation_patch.py
+--prepared out/activation-state-1 --restore in recovery. It verifies volume
+identity/sector bytes and supports idempotence; write errors roll back known
+preflight sectors. Original/patch sectors and Apple files are NOT in git.
+
+ESP was verified still physical-keys-1 SHA2ead6fae277408e9af14ee3fa0ca0b707f66ceb070970e7133ed8f88ce7f5efa.
+TemporaryMu fastbootboot Sending+Booting OKAY, diagnostics/activation-state-1-boot.*.
+SAME kernelCI40038203873,CPU6,fit60,touch+keys,nativeRWroot. No new kernel/ESP
+needed for the userland fix. Phone now booting patched iOS; USER RESULT PENDING
+via async (screen after Apple/shortPower). Do not claim black screen fixed yet.
+If fail, recovery collect BEFORE nextboot, inspect SB main and signature errors;
+rollback the2sectors if patch rejected. No local QEMU, Android/boot flashes or
+full root rewrite. Only current filedata sectors changed; backup untouched.
+
 ## Physical keys kernel installed and temporary Mu boot OKAY — 2026-10-24
 
 KernelCI40038203873 SUCCESS, commit256f2e446a41d50bb07d3ff2dc864889503f2ed6.
