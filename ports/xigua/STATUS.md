@@ -1,3 +1,49 @@
+## Display performance test2 SENT to phone — 2026-10-23
+
+out/efi-ios-display-2/esp.img installed in recovery through BusyBox dd;
+full SHA readback VERIFIED0920546fa5c32d0078ab907f9a6255f71637b504ddd33d68de7f0888b6029248.
+First upload failed transient USB BEFOREdd, retry succeeded. Logs diagnostics/
+ios-before-display-2.log, ios-display-2-esp-install.log (failed upload),
+ios-display-2-esp-install-retry.log (verified success). Prior working CPU6 ESP
+saved in diagnostics/ios-before-display-2/esp-after-probe.img (96MiB verified).
+TemporaryMu fastbootboot SUCCEEDED, Sending/Booting OKAY:
+diagnostics/ios-display-2-boot.txt/.json. CPU6/fb30/fitON, cachedcanvas+dirtytiles,
+SAME proven-boot CI39662845808 with GICstride0x40000. Rootlinux untouched.
+User observation pending: full-panel fit, visible redraw speed, possible panic.
+Do not reboot or move on to inputs while waiting. Apple-logo15min cause still
+UNMEASURED; old root leaves~960MiB managedRAM before further kerneloverhead.
+No QEMU and no10Hz. One task at a time: finish display test before another.
+
+## CPU6-configured iOS boots; display performance test prepared — 2026-10-23
+
+User reports stride-fix build BOOTED iOS, calls it6cores/30Hz, but speed feels
+unchanged and Apple-logo stage still takes15minutes. Root-copy stage is NOT
+main delay (user explicit). No captured6/6line/runtimeCPU counters, so separate
+user report from instrumented count. GIC panics no longer reported with this
+CI39662845808 kernel. Current next single task: framebuffer performance/fit.
+
+Read-only host root audit: migration/SpringBoard/Setup skip prefs are present
+and correct; no evidence migration is the15minute cause. HFS root12GiB in13GiB
+UEFI reservedRAM leaves960MiB before further kernel allocations (root starts
+64MiB afterRAMbase); memory pressure plausible but UNMEASURED. No root edits.
+Readonly mount unmounted. Private audits build/ios-root-size-audit.txt and
+build/ios-system-library-size-audit.txt. No local QEMU, still forbidden.
+
+FOUND current CPU6 image fitOFF: cached composition+changedtiles code already
+compiled into successful kernel but inactive. Prepared new out/phone-ios-display-2
+and out/efi-ios-display-2/esp.img using SAME CI39662845808 kernel/root, CPU6,
+GICRstride0x40000, fb30, sweetfb_fit1. Embedded payload verified:1125x2436logical
+canvas retained; output scaled to1240x2772physical. Enables cached canvas,
+previousframe comparison and changed64pixel tile writes; initialfullclear.
+ESP SHA0920546fa5c32d0078ab907f9a6255f71637b504ddd33d68de7f0888b6029248.
+Rootlinux remains12GiBunchanged; bootpartitions notflashed. Phone foundAndroid
+rootPJA110, bootmode=reboot; adb reboot recovery sent. Awaitrecovery, then
+probe_device.py restore --output diagnostics/ios-before-display-2, install
+--prepared-image out/efi-ios-display-2/esp.img; temporaryMu boot. Record actual
+results before claiming improved speed. Boot15minutes still UNSOLVED; this
+single test targets visible redraw/blackborders, then revisit startup/memory.
+Do not start keys/touch or rewrite root while waiting for display observation.
+
 ## Stride-fix kernel ready; CPU6 hardware test3 — 2026-10-21
 
 CI39662845808 SUCCESS, commit5f0e41364d83ca34820e78f74f4701c5cd151e00.
