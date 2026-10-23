@@ -1,3 +1,25 @@
+## USER CONFIRMED TOUCH WORKS; native iOS+touch3 image READY — 2026-10-23
+
+User confirmed "все работает, тач" on touchprobe3 with kernelCI40015010182,
+commit29c8385, SHAeff575ab461bc07ff83e05f70f81ad53c81a56deed55ea745da1586132ed90eb.
+Private receipt diagnostics/touch-probe-3-result.json. Raw coordinates/VDD log
+not transcribed; user confirmation is the hardware evidence. Touch works in
+the tiny RAM diagnostic; full iOS with this touch kernel NOT yet tested.
+
+User requested ready full iOS image and self-service instructions (quota low).
+Built out/phone-ios-ufs-touch-3 and out/efi-ios-ufs-touch-3/esp.img (96MiB), SHA
+18fdaae3145d85462ade0797c072c82fb2c7aa2569667592e5e412d0a2f14254.
+Native existing linux RW root, no RAMroot/CRCbaseline, CPU6, fit60 cap,
+xiguatouch1, stack samples SpringBoard/backboardd/lsd. Local IOS_TOUCH_READY.md
+contains exact install/temporaryMu boot and rebuild commands; install.sh in
+out/efi-ios-ufs-touch-3 saves current ESP then BusyBoxdd+fullSHA verifies.
+Script syntax and prepared ESP SHA checked. This image NOT installed by agent;
+phone remains in the working touchprobe3 unless user manually rebooted.
+No boot_a/b flashes; use existing user Mu via fastboot boot. Do not reflash
+12GiB baseline over persistent caches. Next measure actual second native iOS
+boot and check touch inside UI. Buttons remain separate, not implemented.
+Local QEMU forbidden. User wants one phone task at a time. Handoff preserved.
+
 ## Touch probe3 SENT with VDD vote and unconditional response polling — 2026-10-23
 
 KernelCI40015010182 SUCCESS at29c838519c86adb9bf4766334ad0861f84abe689.
