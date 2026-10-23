@@ -1,3 +1,22 @@
+## Linux UFS references acquired; no new phone changes — 2026-10-23
+
+User can provide Linux kernel sources only. Official OnePlus Ace2Pro sources
+suffice as reference for a native XNU UFS port; no promise of drop-in Linux
+module. Downloaded13 UFS/PHY files (core ufshcd/HCI/UPIU, ufs-qcom, Kalama PHY)
+from OnePlusOSS/android_kernel_oneplus_sm8550, branch
+oneplus/sm8550_v_15.0.0_ace_2_pro, commit
+fe53a93e64c6d6b01e68b8dbc35be235a0fe78b4. Local .cache/input-source/oneplus-kernel/;
+SHA256/source manifest build/oneplus-ufs-source-ref.json. No kernel build/test
+or device action for this acquisition. Existing modules/DT reference remains
+82601baff20dde1770d62adc8da7a51474304bad. Actual liveUFS regs1d84000/3000,
+1d88000/8000,1d90000/9000. Existing donor XNU UFS has generic legacyUTP/SCSI,
+but remains disabled for XIGUA. DMA mapping/firmware handoff/host compatibility
+must be checked before using it. First future storage milestone: read-only
+partition reads with known checksums, then filesystem root. Do not rewrite
+root or enable disk writes just from source availability.
+Current phone test is STILL display2 CPU6/fit30; observation pending. Preserve
+one-task ordering; don't reboot it to run UFS diagnostics while awaiting that.
+
 ## Display performance test2 SENT to phone — 2026-10-23
 
 out/efi-ios-display-2/esp.img installed in recovery through BusyBox dd;
