@@ -28,6 +28,7 @@ def main():
     p.add_argument('--external-ramdisk-size', type=lambda x: int(x, 0))
     p.add_argument('--ios-userland', action='store_true', help='Enable the iOS display service and launchd boot arguments')
     p.add_argument('--touch', action='store_true', help='Enable experimental XIGUA Synaptics SPI touch input')
+    p.add_argument('--keys', action='store_true', help='Enable experimental XIGUA physical Power/Volume input')
     p.add_argument('--console', action='store_true', help='Keep kernel console text visible during iOS presentation')
     p.add_argument('--sample-processes', help='Comma-separated process names for persistent native-UFS stack samples')
     storage = p.add_mutually_exclusive_group()
@@ -53,6 +54,8 @@ def main():
         p.error('UFS root requires iOS userland without a RAM disk')
     if a.touch and (not a.ios_userland or a.display_mode != 'fit'):
         p.error('--touch requires iOS userland and full-panel fit mode')
+    if a.keys and not a.ios_userland:
+        p.error('--keys requires --ios-userland for HID input')
     if a.sample_processes:
         import re
         if (not a.ufs_root or len(a.sample_processes) > 127 or
@@ -108,6 +111,10 @@ def main():
             if profile['kind'] != 'phone':
                 p.error('XIGUA touch requires the verified phone profile')
             command += ' xiguatouch=1'
+        if a.keys:
+            if profile['kind'] != 'phone':
+                p.error('XIGUA keys require the verified phone profile')
+            command += ' xiguakeys=1'
         if a.ios_userland:
             command += ' unentitled_ios_sim_launch=1 ignition_level=1 rootrw=1 launchd_unsecure_cache=1'
             command += f' sweetfb_noconsole={0 if a.console else 1}'

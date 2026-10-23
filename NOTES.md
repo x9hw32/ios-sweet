@@ -1,3 +1,35 @@
+## Physical Power/Volume candidate ready, user prioritizes actual buttons — 2026-10-24
+
+Latest recovery console saved BEFORE any new boot in diagnostics/
+ios-black-20261023T230300-91318 (366374B,50flush,2samples). Again display ON
+then OFF without ON; full iOS touch works. SpringBoard PID26 stable across
+these 2samples (do not assume every black boot has SpringBoard restart).
+User explicitly prioritizes PHYSICAL buttons. Uncommitted touch-to-wake
+prototype was discarded entirely before this change. No touchwake ABI added.
+
+New opt-in xiguakeys1 / host --keys, read-only SPMI v7 observer EE0 bus0.
+Actual DT core c400000/3000,cnfg c42d000/4000,obs c440000/80000. v7 map2000,
+owner4*APID, observer20*APID (not donor v5). Strict version7/count/PPID/register
+allowlists; only EXT_READL opcode1, 1byte. No PMIC writes, IRQ ACKs/reset/pin
+configuration. Power/Volume use PON SID0 1310 bits7/6, HLOS subtype9 required;
+other volume PM8550 SID1 GPIO6 8d10 bit0 activeLOW, input+enable verified.
+DT misleading label vol_up has linux code114 (VolumeDOWN), resin code115
+(VolumeUP); follow actual Linux codes. Existing sweet_hid_key routes0/1/2.
+3sample debounce (~20-30ms), held-at-boot ignored until release, failed reads
+cannot press; reported held keys released after3failed reads. Uncertain
+observer timeout poisons channel until reboot. Touch source unchanged.
+Pinned OnePlus fe53a93e64c6d6b01e68b8dbc35be235a0fe78b4 source references:
+drivers/spmi/spmi-pmic-arb.c, drivers/input/misc/pm8941-pwrkey.c,
+drivers/pinctrl/qcom/pinctrl-spmi-gpio.c (cached privately). Recovery exposes
+pmic_pwrkey/event6,pmic_resin/event7,gpio-keys/event0; recording requested but
+no key events seen yet. No broad regmap dumps or devmem used.
+
+42hosttests PASS; new keys.c ARM64 compile with real XNU headers PASS;
+regenerated0082 apply-check PASS. Next kernelCI, full native iOS+touch+keys
+CPU6 fit60 with persistent logs, phone test Power and volume. Phone currently
+in recovery. Do not claim buttons work yet; this candidate not booted. No
+local QEMU or boot partition flashes. Existing user root/caches preserved.
+
 ## Black-screen log read: display OFF without ON, repeated SpringBoard starts — 2026-10-24
 
 Read actual diagnostics/ios-black-20261023T204020-66424/console.txt (852530B).

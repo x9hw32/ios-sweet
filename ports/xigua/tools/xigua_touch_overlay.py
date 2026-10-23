@@ -4,12 +4,12 @@ from pathlib import Path
 
 def apply(replace, create):
     root = Path(__file__).resolve().parent.parent
-    for name in ['xigua_tcm.h', 'xigua_geni_spi.h', 'xigua_touch.c', 'xigua_vdd.h', 'xigua_rpmh.c', 'xigua_tcm_poll.h']:
+    for name in ['xigua_tcm.h', 'xigua_geni_spi.h', 'xigua_touch.c', 'xigua_vdd.h', 'xigua_rpmh.c', 'xigua_tcm_poll.h', 'xigua_keys.h', 'xigua_keys.c']:
         create('bsd/dev/' + name, (root / 'kernel' / name).read_text())
     replace('bsd/conf/files', 'bsd/dev/sweet_touch.c\t\t\tstandard\n',
-            'bsd/dev/sweet_touch.c\t\t\tstandard\nbsd/dev/xigua_touch.c\t\t\tstandard\nbsd/dev/xigua_rpmh.c\t\t\tstandard\n')
+            'bsd/dev/sweet_touch.c\t\t\tstandard\nbsd/dev/xigua_touch.c\t\t\tstandard\nbsd/dev/xigua_rpmh.c\t\t\tstandard\nbsd/dev/xigua_keys.c\t\t\tstandard\n')
     replace('iokit/bsddev/IOKitBSDInit.cpp', '    uint32_t ufs_probe = 0;',
-            '    extern void xigua_touch_start(void);\n    xigua_touch_start();\n    uint32_t ufs_probe = 0;')
+            '    extern void xigua_touch_start(void);\n    extern void xigua_keys_start(void);\n    xigua_touch_start();\n    xigua_keys_start();\n    uint32_t ufs_probe = 0;')
     hid = 'iokit/Kernel/arm/hid/SweetHID.cpp'
     replace(hid, '\tint fLogicalW, fLogicalH, fOffX, fOffY;',
             '\tint fLogicalW, fLogicalH, fOffX, fOffY, fPanelW, fPanelH;')
