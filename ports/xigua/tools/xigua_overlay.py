@@ -5,6 +5,7 @@ import difflib
 from pathlib import Path
 import re
 from xigua_ufs_overlay import apply as apply_ufs_overlay
+from xigua_touch_overlay import apply as apply_touch_overlay
 
 
 def overlay(source):
@@ -156,6 +157,7 @@ void sweet_early_disable(void) {}
     # SM8550 UFS is opt-in, uses firmware-reserved low DMA RAM, and keeps
     # the donor's unrelated PMIC/touch/USB hardware initialization disabled.
     apply_ufs_overlay(replace, create)
+    apply_touch_overlay(replace, create)
     replace('iokit/Kernel/arm/SweetBattery.cpp',
             '\tfReal = real == 1 && sweet_spmi_init() == 0;', '''#if defined(ARM64_BOARD_CONFIG_XIGUA)
     fReal = false; /* SM7150 PMIC addresses do not apply to SM8550. */

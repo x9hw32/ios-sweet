@@ -47,14 +47,14 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: xnu-buildtree
-          run-id: 39662845808
+          name: xnu-iig-legacy
+          run-id: 39997597747
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: prior-iig
+          path: build/iig-legacy
 
       - name: Prepare compatible IIG sources
         run: |
-          python3 tools/iig-legacy.py prepare prior-iig/buildtree.tgz build/iig-legacy
+          test -f build/iig-legacy/manifest.json
           chmod +x tools/iig-legacy.py
 
       - uses: actions/upload-artifact@v4

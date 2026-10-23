@@ -1,3 +1,36 @@
+## UFS kernel39997597747 compiled and read-only probe SENT; touch candidate — 2026-10-23
+
+macos15/Xcode16.4 + legacyIIG source cache BUILD SUCCESS. Commit496e2e7,
+kernelSHA4bfd8d05034db22a6388025ad76c730680023046f112d7c36c6a04d1887942ff.
+ZIPCRC+SHA verified artifacts/xigua-ci-39997597747. UFS MMIO disassembly
+build/ufs-handoff-ci-39997597747.asm confirms plain no-writeback register ops.
+Booted out/efi-ufs-probe-1/esp.img SHA
+f13dd44a88ea4be818d40c0d7cffbec019fc44735ef51020990f6154cea302e4.
+ADB found Android; rebooted recovery, backed up display2 ESP in
+ diagnostics/ios-before-ufs-probe-1, restored original then BusyBoxdd installed
+probe and fullreadback verified. Logs diagnostics/ufs-probe-1-esp-install.log,
+ufs-probe-1-boot.txt/json. TemporaryMu fastbootboot OKAY. CPU6, tiny diagnostic
+RAMroot, xiguaufs1 READONLY, no12GiB copy, no rootwrites. USER SCREEN RESULT
+PENDING via async question; do not enable RW native root until READ CHECK PASS.
+
+New OPT-IN touch candidate kernel/xigua_touch.c + xigua_tcm.h, generator
+xigua_touch_overlay.py, hostCLI --touch (requires ios-userland + display-modefit).
+GENISPI a90000 FIFO/polledGPIO25, only clockvotes+GPIO10power+GPIO24reset;
+requires alreadyloadedSPI controller firmware, no PMIC or FWflash. TouchComv1
+identification/maxwrite limits, chunked commands, appmode/start retries,
+HBPrawdisable + LBP2 switch + configured report0x11. Decodes up to10 contacts,
+scales rawcoords to1240x2772, emits existingnativeHID lifecycle/edgegestures.
+SweetHID physicalpanel dims fromPE_Video, normalizesfullpanel fit correctly.
+DefaulttouchOFF; current UFSprobe kernel does NOT include this newdriver.
+33hostchecks PASS both workspace and publishedports. Added independent C
+known-vector contact/bounds/lifecycle/chunk-reassembly test. Actualdriver local
+ARM64 MachO crosscompile with generated XNUheaders PASS (not mockheaders),
+build/touch-local-compile.log. Local HID C++ compile requires AppleClang type
+summary builtins unavailable in LinuxClang; validate it in the next CI. Hardwaretouch
+NOT TESTED. First nativeUFSboot should still keep touchOFF for isolated test.
+Workflow now bootstraps IIG from90day xnu-iig-legacy artifact of39997597747,
+removing dependency on old7day buildtree. No localQEMU started.
+
 ## Build runner brownout handled: macOS15 + verified legacy IIG cache — 2026-10-23
 
 UFS CI39994662621 never got a runner. Found official GitHub macOS14 brownout
