@@ -14,11 +14,13 @@
 #include <pexpert/arm64/XiguaMMIO.h>
 #include "xigua_tcm.h"
 #include "xigua_geni_spi.h"
+#include "xigua_tcm_poll.h"
 
 extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
 extern kern_return_t thread_terminate(thread_t);
 extern void sweet_hid_touch(int, int, int, int);
 extern int hz;
+extern int xigua_touch_vdd_on(void);
 void xigua_touch_start(void);
 static uintptr_t tp_se, tp_gpio, tp_gcc;
 static unsigned tp_depth, tp_max_x, tp_max_y, tp_max_write = 64, tp_fw_mode;
@@ -28,6 +30,8 @@ static uint8_t tp_packet[1024], tp_transfer[1027];
 static int tp_sleep_channel;
 static const char *tp_stage = "mapping";
 static int tp_fault_logged;
+static uint8_t tp_last_header[4];
+static unsigned tp_header_count;
 
 static uint32_t tp_read(unsigned reg) { return xigua_mmio_read32(tp_se + reg); }
 static void tp_write(unsigned reg, uint32_t v) { xigua_mmio_write32(tp_se + reg, v); }
@@ -55,6 +59,11 @@ static int tp_fault(const char *phase, int error, unsigned opcode, unsigned sent
         printf("XIGUA TOUCH: MCLK=%x SEL=%x IOS=%x TOP=%x GPIO25=%x\n",
             tp_read(0x48), tp_read(0x7c), tp_read(0x908), tp_read(0xe1c),
             xigua_mmio_read32(tp_gpio + 25 * 0x1000 + 4));
+        printf("XIGUA TOUCH: HDR=%02x/%02x/%02x/%02x GPIO10=%x/%x GPIO24=%x/%x IRQCFG=%x\n",
+            tp_last_header[0], tp_last_header[1], tp_last_header[2], tp_last_header[3],
+            xigua_mmio_read32(tp_gpio + 10 * 0x1000), xigua_mmio_read32(tp_gpio + 10 * 0x1000 + 4),
+            xigua_mmio_read32(tp_gpio + 24 * 0x1000), xigua_mmio_read32(tp_gpio + 24 * 0x1000 + 4),
+            xigua_mmio_read32(tp_gpio + 25 * 0x1000));
     }
     return error;
 }
@@ -122,7 +131,14 @@ static int tp_message(unsigned *code, unsigned *length) {
     uint8_t header[4];
     int error = tp_spi(NULL, header, sizeof(header));
     if (error) return error;
-    if (header[0] != 0xa5) return EIO;
+    memcpy(tp_last_header, header, sizeof(header));
+    if (tp_header_count++ < 4) printf("XIGUA TOUCH: bus read=%02x/%02x/%02x/%02x ATTN=%u\n",
+        header[0], header[1], header[2], header[3], tp_attention());
+    if (header[0] != 0xa5) {
+        if ((!header[0] && !header[1] && !header[2] && !header[3]) ||
+            (header[0] == 255 && header[1] == 255 && header[2] == 255 && header[3] == 255)) return EAGAIN;
+        return EIO;
+    }
     *code = header[1]; *length = xigua_le16(header + 2);
     if (*length > sizeof(tp_packet)) return EMSGSIZE;
     if (!*length) return 0;
@@ -143,6 +159,18 @@ static void tp_identify(unsigned length) {
         tp_packet[0], tp_fw_mode, tp_max_write);
 }
 
+static int tp_poll_read(void *context, unsigned *code, unsigned *length) {
+    (void)context;
+    int error = tp_message(code, length);
+    if (!error && *code >= 8 && *code < 0x10) printf("XIGUA TOUCH: command status=%x\n", *code);
+    return error;
+}
+static unsigned tp_poll_identify(void *context, unsigned length) {
+    (void)context; tp_identify(length); return tp_fw_mode;
+}
+static void tp_poll_pause(void *context) { (void)context; tp_pause(5); }
+static bool tp_poll_expired(void *context) { return mach_absolute_time() >= *(const uint64_t *)context; }
+
 static int tp_request(unsigned command, const uint8_t *data, unsigned size, unsigned *reply_size) {
     if (size > sizeof(tp_transfer) - 3) return EMSGSIZE;
     unsigned offset = 0, packet_size;
@@ -156,25 +184,11 @@ static int tp_request(unsigned command, const uint8_t *data, unsigned size, unsi
         if (offset < size) delay(200);
     } while (offset < size);
     uint64_t deadline = tp_deadline(1000);
-    do {
-        if (!tp_attention()) { tp_pause(5); continue; }
-        unsigned code, length;
-        error = tp_message(&code, &length);
-        if (error) return error;
-        if (code == 0x10) {
-            tp_identify(length);
-            if (command == 0x14 && tp_fw_mode == 1) {
-                if (reply_size) *reply_size = length;
-                return 0;
-            }
-        }
-        if (code == 1) { if (reply_size) *reply_size = length; return 0; }
-        if (code >= 8 && code < 0x10) {
-            printf("XIGUA TOUCH: command=%x status=%x\n", command, code);
-            return EIO;
-        }
-    } while (mach_absolute_time() < deadline);
-    return tp_fault("tcm-response", ETIMEDOUT, command, size, 0);
+    const struct xigua_tcm_poll_ops ops = {
+        &deadline, tp_poll_read, tp_poll_identify, tp_poll_pause, tp_poll_expired
+    };
+    error = xigua_tcm_poll_response(&ops, command, reply_size);
+    return error ? tp_fault("tcm-response", error, command, size, 0) : 0;
 }
 
 static int tp_setup(void) {
@@ -219,20 +233,28 @@ static int tp_setup(void) {
     tp_write(0x80c, 0); tp_write(0x810, 1); tp_write(0x814, tp_depth - 2);
     tp_write(0x618, ~0U); tp_write(0x648, ~0U);
     tp_stage = "power-reset";
-    tp_gpio_output(10, 1); tp_pause(200);
+    tp_gpio_output(10, 1);
+    tp_stage = "vdd-1v8";
+    int error = xigua_touch_vdd_on();
+    if (error) return error;
+    tp_pause(200);
     tp_gpio_output(24, 0); tp_pause(10); tp_gpio_output(24, 1); tp_pause(80);
     tp_stage = "reset-identify";
-    /* Drain the reset identification report before issuing requests. */
-    deadline = tp_deadline(1000);
-    while (!tp_attention() && mach_absolute_time() < deadline) tp_pause(5);
-    if (tp_attention()) {
+    /* Like Linux detect_device, read SPI directly; ATTN is not a prerequisite. */
+    for (unsigned retry = 0; retry < 5 && !tp_fw_mode; retry++) {
         unsigned code, length;
-        int error = tp_message(&code, &length);
-        if (error) return error;
-        if (code == 0x10) tp_identify(length);
+        error = tp_message(&code, &length);
+        if (error && error != EAGAIN) return error;
+        if (!error && code == 0x10) tp_identify(length);
+        if (!tp_fw_mode) tp_pause(20);
     }
     unsigned length = 0;
-    int error;
+    if (!tp_fw_mode) {
+        tp_stage = "identify-command";
+        error = tp_request(2, NULL, 0, &length);
+        if (error) return error;
+        if (!tp_fw_mode) return EIO;
+    }
     if (tp_fw_mode && tp_fw_mode != 1) {
         tp_stage = "run-application";
         error = tp_request(0x14, NULL, 0, NULL); /* run installed application */
@@ -293,12 +315,18 @@ static void tp_thread(void *arg, wait_result_t result) {
             error = xigua_tcm_contacts(tp_packet, length, tp_max_x, tp_max_y,
                 1240, 2772, contacts, &active) ? EINVAL : 0;
             if (!error) {
+                uint16_t previous_active = tp_active;
                 for (int i = 0; i < 10; i++) {
                     if (active & (1U << i)) sweet_hid_touch(i, 1, contacts[i].x, contacts[i].y);
                     else if (tp_active & (1U << i)) sweet_hid_touch(i, 0, tp_contacts[i].x, tp_contacts[i].y);
                 }
                 tp_active = active; memcpy(tp_contacts, contacts, sizeof(contacts));
-                if (reports++ < 8) printf("XIGUA TOUCH: report %u contacts=%x\n", reports, active);
+                if (reports++ < 8 || active != previous_active) {
+                    unsigned first = 0;
+                    while (first < 9 && !(active & (1U << first))) first++;
+                    printf("XIGUA TOUCH: report %u contacts=%x point=%u,%u\n",
+                        reports, active, contacts[first].x, contacts[first].y);
+                }
             }
         }
         if (error) {

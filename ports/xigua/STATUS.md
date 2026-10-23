@@ -1,3 +1,30 @@
+## Touch probe2 diagnosed; power and polling candidate ready for CI — 2026-10-23
+
+USER probe2: application-info/tcm-response errno60; op20; CMD48000000,
+IRQ0 ACTIVE0 TX0 RX0 EN7fc0007f MCLK401 SEL0 IOS0 TOP0 GPIO25=1.
+GENI commands now complete, but the driver never clocked TCM responses while
+ATTN was high. No Synaptics identity has been seen; firmware102 is GENI SPI.
+Saved private diagnostics/touch-probe-2-result.json.
+
+Candidate3 always polls command responses, reads reset identity regardless of
+IRQ, issues IDENTIFY when needed, and logs raw headers. Touch VDD was missing:
+actual DT pm_humu_l4/ldob4,1.8V, and Linux shutdown powers it off. Recovery
+read-only cmd-db confirms ldob4 address40800; regulator enabled1.8V there.
+Added tightly scoped RPMh ACTIVE vote 1800mV/HPM7/enable1 via DRV2 at17a20000,
+cmd-db81c60000. Only fully idle/empty ACTIVE TCS0..2 may be borrowed; refuses
+unknown layouts, conflicts and uncertain completions. Never uses sleep/wake,
+SPMI or firmware flashing. Revision2.7/3.0 layouts follow pinned OnePlus kernel
+fe53a93e64c6d6b01e68b8dbc35be235a0fe78b4 drivers/soc/qcom/{rpmh-rsc,cmd-db}.c
+and drivers/regulator/qcom-rpmh-regulator.c. No hardware vote made yet.
+
+41 host tests PASS (including cmd-db, both RPMh layouts/ownership/failures,
+command responses without IRQ); touch.c and rpmh.c real-XNU-header ARM64
+cross-compiles PASS. Regenerated0082 apply-check PASS. Next commit/push CI,
+then short RAM-init touchprobe3, UFSOFF/CPU6. Do not boot old full touch2 image.
+Phone is in recovery; read-only debugfs created for reference was UNMOUNTED.
+No QEMU, boot flashes, Android/root partition writes. Persistent iOS root
+snapshot and LaunchServices findings below remain valid. Touch not yet working.
+
 ## Touch probe2 SENT; current root backed up and LaunchServices stores persisted — 2026-10-23
 
 KernelCI40009954336 SUCCESS at commit2de11dd. ZIPCRC+SHA verified:

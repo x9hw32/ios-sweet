@@ -11,11 +11,12 @@
  sweet_pthread_init.o_INCFLAGS = $(SWEET_PTHREAD_INC)
 --- a/bsd/conf/files
 +++ b/bsd/conf/files
-@@ -108,6 +108,7 @@
+@@ -108,6 +108,8 @@
  bsd/dev/sweet_sample.c			standard
  bsd/dev/sweet_keys.c			standard
  bsd/dev/sweet_touch.c			standard
 +bsd/dev/xigua_touch.c			standard
++bsd/dev/xigua_rpmh.c			standard
  bsd/dev/sweet_rpmh.c			standard
  bsd/dev/sweet_spmi.c			standard
  bsd/dev/sweet_usb.c			standard
@@ -1246,6 +1247,50 @@
 +}
 +#endif
 --- /dev/null
++++ b/bsd/dev/xigua_rpmh.c
+@@ -0,0 +1,41 @@
++/* PJA110 S3910 1.8V VDD only. No SPMI, other rails or sleep/wake TCS writes. */
++#if defined(ARM64_BOARD_CONFIG_XIGUA)
++#include <sys/param.h>
++#include <sys/systm.h>
++#include <sys/errno.h>
++#include <kern/clock.h>
++#include <pexpert/pexpert.h>
++#include <pexpert/arm64/XiguaMMIO.h>
++#include "xigua_vdd.h"
++extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
++extern vm_offset_t ml_io_map_wcomb(vm_offset_t, vm_size_t);
++int xigua_touch_vdd_on(void);
++static uintptr_t vdd_rsc, vdd_db;
++static bool vdd_poisoned;
++static uint32_t vdd_read(void *ctx, unsigned off) {
++    uint32_t v = xigua_mmio_read32((uintptr_t)ctx + off);
++    __asm__ volatile("dmb oshld" ::: "memory");
++    return v;
++}
++static void vdd_write(void *ctx, unsigned off, uint32_t value) {
++    __asm__ volatile("dmb oshst" ::: "memory");
++    xigua_mmio_write32((uintptr_t)ctx + off, value);
++    __asm__ volatile("dsb osh" ::: "memory");
++}
++static void vdd_pause(void *ctx, unsigned us) { (void)ctx; delay(us); }
++int xigua_touch_vdd_on(void) {
++    if (!vdd_rsc) vdd_rsc = ml_io_map(0x17a20000, 0x10000);
++    if (!vdd_db) vdd_db = ml_io_map_wcomb(0x81c60000, XIGUA_VDD_DB_BYTES);
++    if (!vdd_rsc || !vdd_db) return ENOMEM;
++    uint32_t id = vdd_read((void *)vdd_rsc, 0), cfg = vdd_read((void *)vdd_rsc, 0xc);
++    unsigned major = (id >> 16) & 255, count = (cfg >> 12) & 63, ncpt = cfg >> 27;
++    printf("XIGUA TOUCH VDD: RSC2 id=%x cfg=%x major=%u TCS=%u ncpt=%u\n", id, cfg, major, count, ncpt);
++    if (count < 8 || count > 16 || ncpt < 3 || ncpt > 16 || (major != 2 && major != 3)) return ENODEV;
++    int error = xigua_vdd_check_db(vdd_read, (void *)vdd_db);
++    if (error) { printf("XIGUA TOUCH VDD: cmd-db ldob4 mapping refused: %d\n", error); return error; }
++    struct xigua_rpmh_io io = {(void *)(vdd_rsc + 0xd00), vdd_read, vdd_write, vdd_pause};
++    error = xigua_vdd_vote(&io, major, ncpt, &vdd_poisoned);
++    printf("XIGUA TOUCH VDD: ldob4 addr=40800 ACTIVE 1800mV HPM enable vote result=%d\n", error);
++    return error;
++}
++#endif
+--- /dev/null
 +++ b/bsd/dev/xigua_tcm.h
 @@ -0,0 +1,63 @@
 +/* Minimal TouchCom v1 coordinate format, configured explicitly by our driver.
@@ -1312,8 +1357,50 @@
 +}
 +#endif
 --- /dev/null
++++ b/bsd/dev/xigua_tcm_poll.h
+@@ -0,0 +1,39 @@
++/* TouchCom command polling must clock the bus even when ATTN stays high.
++ * OnePlus's polling path calls read_message periodically, not only on IRQ.
++ */
++#ifndef XIGUA_TCM_POLL_H
++#define XIGUA_TCM_POLL_H
++#include <stdbool.h>
++struct xigua_tcm_poll_ops {
++    void *context;
++    int (*read)(void *, unsigned *, unsigned *);
++    unsigned (*identify)(void *, unsigned);
++    void (*pause)(void *);
++    bool (*expired)(void *);
++};
++static int
++xigua_tcm_poll_response(const struct xigua_tcm_poll_ops *ops, unsigned command, unsigned *reply_size)
++{
++    while (!ops->expired(ops->context)) {
++        ops->pause(ops->context);
++        unsigned code = 0, length = 0;
++        int error = ops->read(ops->context, &code, &length);
++        if (error == EAGAIN) continue;
++        if (error) return error;
++        if (code == 0x10) {
++            unsigned mode = ops->identify(ops->context, length);
++            if (command == 2 || (command == 0x14 && mode == 1)) {
++                if (reply_size) *reply_size = length;
++                return 0;
++            }
++        }
++        if (code == 1) {
++            if (command == 2) (void)ops->identify(ops->context, length);
++            if (reply_size) *reply_size = length;
++            return 0;
++        }
++        if (code >= 8 && code < 0x10) return EIO;
++    }
++    return ETIMEDOUT;
++}
++#endif
+--- /dev/null
 +++ b/bsd/dev/xigua_touch.c
-@@ -0,0 +1,326 @@
+@@ -0,0 +1,354 @@
 +/* XIGUA / SM8550 / Synaptics S3910: polled GENI SPI -> native HID contacts.
 + * Board wiring and register layouts are from the verified live DT and the
 + * OnePlus Linux sources. Controller firmware must already be loaded by the
@@ -1330,11 +1417,13 @@
 +#include <pexpert/arm64/XiguaMMIO.h>
 +#include "xigua_tcm.h"
 +#include "xigua_geni_spi.h"
++#include "xigua_tcm_poll.h"
 +
 +extern vm_offset_t ml_io_map(vm_offset_t, vm_size_t);
 +extern kern_return_t thread_terminate(thread_t);
 +extern void sweet_hid_touch(int, int, int, int);
 +extern int hz;
++extern int xigua_touch_vdd_on(void);
 +void xigua_touch_start(void);
 +static uintptr_t tp_se, tp_gpio, tp_gcc;
 +static unsigned tp_depth, tp_max_x, tp_max_y, tp_max_write = 64, tp_fw_mode;
@@ -1344,6 +1433,8 @@
 +static int tp_sleep_channel;
 +static const char *tp_stage = "mapping";
 +static int tp_fault_logged;
++static uint8_t tp_last_header[4];
++static unsigned tp_header_count;
 +
 +static uint32_t tp_read(unsigned reg) { return xigua_mmio_read32(tp_se + reg); }
 +static void tp_write(unsigned reg, uint32_t v) { xigua_mmio_write32(tp_se + reg, v); }
@@ -1371,6 +1462,11 @@
 +        printf("XIGUA TOUCH: MCLK=%x SEL=%x IOS=%x TOP=%x GPIO25=%x\n",
 +            tp_read(0x48), tp_read(0x7c), tp_read(0x908), tp_read(0xe1c),
 +            xigua_mmio_read32(tp_gpio + 25 * 0x1000 + 4));
++        printf("XIGUA TOUCH: HDR=%02x/%02x/%02x/%02x GPIO10=%x/%x GPIO24=%x/%x IRQCFG=%x\n",
++            tp_last_header[0], tp_last_header[1], tp_last_header[2], tp_last_header[3],
++            xigua_mmio_read32(tp_gpio + 10 * 0x1000), xigua_mmio_read32(tp_gpio + 10 * 0x1000 + 4),
++            xigua_mmio_read32(tp_gpio + 24 * 0x1000), xigua_mmio_read32(tp_gpio + 24 * 0x1000 + 4),
++            xigua_mmio_read32(tp_gpio + 25 * 0x1000));
 +    }
 +    return error;
 +}
@@ -1438,7 +1534,14 @@
 +    uint8_t header[4];
 +    int error = tp_spi(NULL, header, sizeof(header));
 +    if (error) return error;
-+    if (header[0] != 0xa5) return EIO;
++    memcpy(tp_last_header, header, sizeof(header));
++    if (tp_header_count++ < 4) printf("XIGUA TOUCH: bus read=%02x/%02x/%02x/%02x ATTN=%u\n",
++        header[0], header[1], header[2], header[3], tp_attention());
++    if (header[0] != 0xa5) {
++        if ((!header[0] && !header[1] && !header[2] && !header[3]) ||
++            (header[0] == 255 && header[1] == 255 && header[2] == 255 && header[3] == 255)) return EAGAIN;
++        return EIO;
++    }
 +    *code = header[1]; *length = xigua_le16(header + 2);
 +    if (*length > sizeof(tp_packet)) return EMSGSIZE;
 +    if (!*length) return 0;
@@ -1459,6 +1562,18 @@
 +        tp_packet[0], tp_fw_mode, tp_max_write);
 +}
 +
++static int tp_poll_read(void *context, unsigned *code, unsigned *length) {
++    (void)context;
++    int error = tp_message(code, length);
++    if (!error && *code >= 8 && *code < 0x10) printf("XIGUA TOUCH: command status=%x\n", *code);
++    return error;
++}
++static unsigned tp_poll_identify(void *context, unsigned length) {
++    (void)context; tp_identify(length); return tp_fw_mode;
++}
++static void tp_poll_pause(void *context) { (void)context; tp_pause(5); }
++static bool tp_poll_expired(void *context) { return mach_absolute_time() >= *(const uint64_t *)context; }
++
 +static int tp_request(unsigned command, const uint8_t *data, unsigned size, unsigned *reply_size) {
 +    if (size > sizeof(tp_transfer) - 3) return EMSGSIZE;
 +    unsigned offset = 0, packet_size;
@@ -1472,25 +1587,11 @@
 +        if (offset < size) delay(200);
 +    } while (offset < size);
 +    uint64_t deadline = tp_deadline(1000);
-+    do {
-+        if (!tp_attention()) { tp_pause(5); continue; }
-+        unsigned code, length;
-+        error = tp_message(&code, &length);
-+        if (error) return error;
-+        if (code == 0x10) {
-+            tp_identify(length);
-+            if (command == 0x14 && tp_fw_mode == 1) {
-+                if (reply_size) *reply_size = length;
-+                return 0;
-+            }
-+        }
-+        if (code == 1) { if (reply_size) *reply_size = length; return 0; }
-+        if (code >= 8 && code < 0x10) {
-+            printf("XIGUA TOUCH: command=%x status=%x\n", command, code);
-+            return EIO;
-+        }
-+    } while (mach_absolute_time() < deadline);
-+    return tp_fault("tcm-response", ETIMEDOUT, command, size, 0);
++    const struct xigua_tcm_poll_ops ops = {
++        &deadline, tp_poll_read, tp_poll_identify, tp_poll_pause, tp_poll_expired
++    };
++    error = xigua_tcm_poll_response(&ops, command, reply_size);
++    return error ? tp_fault("tcm-response", error, command, size, 0) : 0;
 +}
 +
 +static int tp_setup(void) {
@@ -1535,20 +1636,28 @@
 +    tp_write(0x80c, 0); tp_write(0x810, 1); tp_write(0x814, tp_depth - 2);
 +    tp_write(0x618, ~0U); tp_write(0x648, ~0U);
 +    tp_stage = "power-reset";
-+    tp_gpio_output(10, 1); tp_pause(200);
++    tp_gpio_output(10, 1);
++    tp_stage = "vdd-1v8";
++    int error = xigua_touch_vdd_on();
++    if (error) return error;
++    tp_pause(200);
 +    tp_gpio_output(24, 0); tp_pause(10); tp_gpio_output(24, 1); tp_pause(80);
 +    tp_stage = "reset-identify";
-+    /* Drain the reset identification report before issuing requests. */
-+    deadline = tp_deadline(1000);
-+    while (!tp_attention() && mach_absolute_time() < deadline) tp_pause(5);
-+    if (tp_attention()) {
++    /* Like Linux detect_device, read SPI directly; ATTN is not a prerequisite. */
++    for (unsigned retry = 0; retry < 5 && !tp_fw_mode; retry++) {
 +        unsigned code, length;
-+        int error = tp_message(&code, &length);
-+        if (error) return error;
-+        if (code == 0x10) tp_identify(length);
++        error = tp_message(&code, &length);
++        if (error && error != EAGAIN) return error;
++        if (!error && code == 0x10) tp_identify(length);
++        if (!tp_fw_mode) tp_pause(20);
 +    }
 +    unsigned length = 0;
-+    int error;
++    if (!tp_fw_mode) {
++        tp_stage = "identify-command";
++        error = tp_request(2, NULL, 0, &length);
++        if (error) return error;
++        if (!tp_fw_mode) return EIO;
++    }
 +    if (tp_fw_mode && tp_fw_mode != 1) {
 +        tp_stage = "run-application";
 +        error = tp_request(0x14, NULL, 0, NULL); /* run installed application */
@@ -1609,12 +1718,18 @@
 +            error = xigua_tcm_contacts(tp_packet, length, tp_max_x, tp_max_y,
 +                1240, 2772, contacts, &active) ? EINVAL : 0;
 +            if (!error) {
++                uint16_t previous_active = tp_active;
 +                for (int i = 0; i < 10; i++) {
 +                    if (active & (1U << i)) sweet_hid_touch(i, 1, contacts[i].x, contacts[i].y);
 +                    else if (tp_active & (1U << i)) sweet_hid_touch(i, 0, tp_contacts[i].x, tp_contacts[i].y);
 +                }
 +                tp_active = active; memcpy(tp_contacts, contacts, sizeof(contacts));
-+                if (reports++ < 8) printf("XIGUA TOUCH: report %u contacts=%x\n", reports, active);
++                if (reports++ < 8 || active != previous_active) {
++                    unsigned first = 0;
++                    while (first < 9 && !(active & (1U << first))) first++;
++                    printf("XIGUA TOUCH: report %u contacts=%x point=%u,%u\n",
++                        reports, active, contacts[first].x, contacts[first].y);
++                }
 +            }
 +        }
 +        if (error) {
@@ -1853,6 +1968,133 @@
 +        if (crc != expected) return EIO;
 +    }
 +    printf("XIGUA UFS: READ CHECK PASS, 3 x 4 MiB match; disk writes disabled\n");
++    return 0;
++}
++#endif
+--- /dev/null
++++ b/bsd/dev/xigua_vdd.h
+@@ -0,0 +1,124 @@
++/* Fixed PJA110 touch VDD: cmd-db ldob4, 1800mV. No other resource can be voted.
++ * Register layouts follow OnePlus rpmh-rsc.c v2.7/v3.0; only ACTIVE TCS0..2
++ * from the live DT may be borrowed, and only when completely empty and idle.
++ */
++#ifndef XIGUA_VDD_H
++#define XIGUA_VDD_H
++#include <stdint.h>
++#include <stdbool.h>
++struct xigua_rpmh_io {
++    void *context;
++    uint32_t (*read)(void *, unsigned);
++    void (*write)(void *, unsigned, uint32_t);
++    void (*pause)(void *, unsigned);
++};
++#define XIGUA_LDOB4_ADDR 0x40800U
++#define XIGUA_VDD_DB_BYTES 0x20000U
++
++static int
++xigua_vdd_check_db(uint32_t (*read)(void *, unsigned), void *context)
++{
++    if (read(context, 0) != 1 || read(context, 4) != 0xc0330db || (read(context, 140) & 1)) return EINVAL;
++    unsigned matches = 0;
++    for (unsigned i = 0; i < 8; i++) {
++        unsigned h = 8 + i * 16;
++        uint32_t a = read(context, h), b = read(context, h + 4);
++        unsigned type = a & 0xffff, count = b >> 16;
++        if (!type) break;
++        if (type != 4) continue;
++        unsigned entries = 144 + (a >> 16), aux = 144 + (b & 0xffff);
++        if ((entries & 3) || entries > XIGUA_VDD_DB_BYTES ||
++            count > (XIGUA_VDD_DB_BYTES - entries) / 24 || aux > XIGUA_VDD_DB_BYTES) return EINVAL;
++        for (unsigned n = 0; n < count; n++) {
++            unsigned e = entries + n * 24;
++            if (read(context, e) != 0x626f646c || read(context, e + 4) != 0x34) continue; /* ldob4 */
++            uint32_t aux_entry = read(context, e + 20);
++            unsigned size = aux_entry & 0xffff, offset = aux_entry >> 16;
++            if (read(context, e + 16) != XIGUA_LDOB4_ADDR ||
++                offset > XIGUA_VDD_DB_BYTES - aux || size > XIGUA_VDD_DB_BYTES - aux - offset) return EINVAL;
++            matches++;
++        }
++    }
++    return matches == 1 ? 0 : ENODEV;
++}
++
++static bool
++xigua_vdd_sync(const struct xigua_rpmh_io *io, unsigned off, uint32_t value)
++{
++    io->write(io->context, off, value);
++    for (unsigned n = 0; n < 1000; n++) {
++        if (io->read(io->context, off) == value) return true;
++        io->pause(io->context, 1);
++    }
++    return false;
++}
++
++static bool
++xigua_vdd_free(const struct xigua_rpmh_io *io, unsigned t, unsigned major)
++{
++    unsigned b = t * 0x2a0, reg = major >= 3 ? 0x20 : 0x10;
++    uint32_t idle = io->read(io->context, b + reg + 8);
++    return idle && idle != ~0U && !io->read(io->context, b + reg) &&
++        !io->read(io->context, b + reg + 4) && !io->read(io->context, b + reg + 12) &&
++        !(io->read(io->context, 4) & (1U << t));
++}
++
++static int
++xigua_vdd_vote(const struct xigua_rpmh_io *io, unsigned major, unsigned ncpt, bool *poisoned)
++{
++    if (*poisoned) return EIO;
++    if ((major != 2 && major != 3) || ncpt < 3 || ncpt > 16) return ENODEV;
++    unsigned wait = major == 3 ? 0x20 : 0x10, control = wait + 4, status = wait + 8, enable = wait + 12;
++    unsigned cmd = major == 3 ? 0x34 : 0x30, stride = major == 3 ? 24 : 20;
++    int slot = -1;
++    for (unsigned t = 0; t < 3; t++) {
++        unsigned b = t * 0x2a0;
++        uint32_t mask = io->read(io->context, b + enable);
++        if (mask & ~((1U << ncpt) - 1)) return EIO;
++        for (unsigned n = 0; n < ncpt; n++)
++            if ((mask & (1U << n)) &&
++                (io->read(io->context, b + cmd + n * stride + 4) & ~15U) == XIGUA_LDOB4_ADDR) return EBUSY;
++        if (slot < 0 && xigua_vdd_free(io, t, major)) slot = (int)t;
++    }
++    if (slot < 0) return EBUSY;
++    unsigned b = (unsigned)slot * 0x2a0, bit = 1U << slot;
++    uint32_t irq = io->read(io->context, 0);
++    if (irq == ~0U || !xigua_vdd_free(io, (unsigned)slot, major)) return EBUSY;
++    if (!xigua_vdd_sync(io, 0, irq & ~bit)) { *poisoned = true; return EIO; }
++    if (!xigua_vdd_free(io, (unsigned)slot, major)) {
++        if (!xigua_vdd_sync(io, 0, (io->read(io->context, 0) & ~bit) | (irq & bit))) *poisoned = true;
++        return EBUSY;
++    }
++    *poisoned = true; /* No retry or reuse after uncertain payload/trigger. */
++    const uint32_t offsets[3] = {0, 8, 4}, data[3] = {1800, 7, 1};
++    for (unsigned n = 0; n < 3; n++) {
++        unsigned c = b + cmd + n * stride;
++        if (!xigua_vdd_sync(io, c, 0x10108) ||
++            !xigua_vdd_sync(io, c + 4, XIGUA_LDOB4_ADDR + offsets[n]) ||
++            !xigua_vdd_sync(io, c + 8, data[n])) return EIO;
++    }
++    if (!xigua_vdd_sync(io, b + wait, 7) || !xigua_vdd_sync(io, b + enable, 7) ||
++        !xigua_vdd_sync(io, b + control, 0) || !xigua_vdd_sync(io, b + control, 1U << 16)) return EIO;
++    io->write(io->context, b + control, (1U << 16) | (1U << 24));
++    bool done = false, progress = false;
++    for (unsigned us = 0; us < 100000; us++) {
++        uint32_t pending = io->read(io->context, 4), idle = io->read(io->context, b + status);
++        bool complete = true;
++        for (unsigned n = 0; n < 3; n++) {
++            uint32_t s = io->read(io->context, b + cmd + n * stride + 12);
++            complete &= s != ~0U && (s & 0x10100) == 0x10100;
++        }
++        progress |= idle == 0 || !complete;
++        if (idle && idle != ~0U && pending != ~0U && ((pending & bit) || progress) && complete) { done = true; break; }
++        io->pause(io->context, 1);
++    }
++    if (!done) return ETIMEDOUT;
++    if (!xigua_vdd_sync(io, b + control, 1U << 16) || !xigua_vdd_sync(io, b + control, 0) ||
++        !xigua_vdd_sync(io, b + enable, 0) || !xigua_vdd_sync(io, b + wait, 0)) return EIO;
++    io->write(io->context, 8, bit); /* W1C only this slot. */
++    if ((io->read(io->context, 4) & bit) ||
++        !xigua_vdd_sync(io, 0, (io->read(io->context, 0) & ~bit) | (irq & bit))) return EIO;
++    *poisoned = false;
 +    return 0;
 +}
 +#endif
