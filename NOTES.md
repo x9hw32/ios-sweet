@@ -1,3 +1,17 @@
+## Active build continuation — 2026-10-23 18:12 UTC
+
+Currentcandidate78a86f2, kernelCI40001017670 inprogress; fetchdaemon
+build/fetch-kernel-40001017670.py/log/status running. Host34tests bothcopiesPASS,
+fullUFS ARM64compilePASS. Need actualartifact -> buildout/phone-ufs-probe-2 and
+out/efi-ufs-probe-2 using --ufs-probe CPU6 tinyroot + verifiedCRCcache. Reboot
+ADB Android to recovery only onceimage ready. Backupprobe1ESP, BusyBoxdd/write
+verify, temporaryMu boot. Newpaniccontainsstage+OCS/status/sense; ask onlythat
+line iffail. Keep touchOFF andnativeUFS RWoff untilverifiedreadpass.
+Touchkernel9ae4474 downloaded artifacts/xigua-ci-39999855589 SHA
+bab53ad3ec36cd1bf73268428e0e5c4eb635d5243189b92605ca9f716853647e.
+Actualsymbols _xigua_touch_start/_tp_thread/_tp_spi/HIDstart confirmedlinked.
+No touchhardwaretestyet. Do not bootthatoldkernel to repeatuninformativeUFS EIO.
+
 ## UFS probe1 FAILED EIO on phone; diagnostic probe2 prepared — 2026-10-23
 
 User saw panic(cpu0): XIGUA UFS read-only probe failed:5 atIOKitBSDInit.cpp780.
