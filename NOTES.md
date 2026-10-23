@@ -1,3 +1,30 @@
+## UFS probe3 with ACTIVE activation SENT to phone — 2026-10-23
+
+KernelCI40003280437 SUCCESS commit4d53528, ZIPCRC+SHA verified:
+a670969edfad80fa1dbd9fe1cdc87c40886573c750d75adfba5587f8a2412bfe.
+Actualkernel contains ready/activate code, DEVICE WLUN d0 and finalpanicLUN;
+readiness disassembly build/ufs-ready-ci-40003280437.asm. 35hostchecks PASS
+bothworkspace/published; fullUFS ARM64localcompilePASS. No localQEMU.
+
+Phone enteredrecovery manually. Backed up priorESP2 in
+ diagnostics/ios-before-ufs-probe-3 and restoredoriginal (fullSHAverified).
+Installed out/efi-ufs-probe-3/esp.img withBusyBoxdd inrecovery; FULLSHAreadback
+2876b16290f383532bb74761992aeed57fbe7efc2ec60c67896b5d54628f3851 VERIFIED.
+TemporaryMu fastbootboot Sending/Booting OKAY. Logs diagnostics/
+ios-before-ufs-probe-3.log, ufs-probe-3-esp-install.log, ufs-probe-3-boot.txt/json.
+CPU6, tinyRAMroot, no12GiBcopy, UFSREADONLY andtouchOFF. USER SCREEN RESULT
+PENDING through async question. Do NOT reboot until observation. Ifpanic,
+getstage/op/lun/ocs/st/sense. READCHECKPASS still REQUIRED before anyRWroot.
+
+PreparedONLY (NOT INSTALLED) matching nativeUFS iOSroot fallback/nextstep:
+out/phone-ios-ufs-3 and out/efi-ios-ufs-3/esp.img SHA
+9502dacc5908ddc094cbc9c26f942fd84124a0ea1e206594635402e89777b3c7.
+Samekernel, CPU6, fit30Hz, --ufs-root --ios-userland, touchOFF. NoRAMrootpreload;
+root alreadyinlinux and MUST NOT be rewritten. Install this only AFTER actual
+probe3CRC PASS. It enables boundedRWlinux andexistingpersistentconsole/process
+sampler; tools/collect_ufs_log.py reads tail fromrecovery ifbootstalls.
+Touch source compiled buthardwareuntested; hold inputtest untilUFSmilestone.
+
 ## Probe2 isolates NOT READY 02/04/02; DEVICE WLUN activation added — 2026-10-23
 
 USER EXACT PANIC: ready err5 op00 ocs0 upiu21 rsp01 st02 sense02/04/02 IS1.
