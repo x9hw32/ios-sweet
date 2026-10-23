@@ -1,3 +1,35 @@
+## Native iOS from UFS at 60 fps cap: installed and boot sent — 2026-10-23
+
+User confirmed recovery; ADB verified PJA110/recovery/root BusyBox. Saved the
+previous probe3 ESP in diagnostics/ios-before-ios-ufs-60-1, then restored the
+original ESP as required by the installation guard. Installed the prepared
+out/efi-ios-ufs-60-1/esp.img via recovery BusyBox dd. Full readback SHA verified:
+fc23e21fc929bb7147109d53846a7658131f3346c5b52e5dbcfa858b3330b6b4.
+Logs: diagnostics/ios-before-ios-ufs-60-1.log and ios-ufs-60-1-esp-install.log.
+Temporary fastboot boot of the user's Mu-xigua-0.img returned Sending/Booting
+OKAY. Started 2026-10-23 18:44:27 UTC / 21:44:27 Moscow. Receipt and output:
+diagnostics/ios-ufs-60-1-boot.json and ios-ufs-60-1-boot.txt.
+
+Same hardware-proven read-check kernel CI40003280437, SHA
+ a670969edfad80fa1dbd9fe1cdc87c40886573c750d75adfba5587f8a2412bfe.
+Payload arguments independently verified: rd=ufsroot0 xiguaufs=2 ufsrw=1,
+cpus=6 sweetfb_hz=60 sweetfb_fit=1. No external RAM root, no 12 GiB preload.
+This is the first REAL iOS root boot from UFS; previous probe ran tiny PID1.
+Presentation cap is 60 fps, not a measured frame rate or confirmed physical
+panel frequency. Touch remains OFF for an isolated native-root boot test.
+User screen observation is PENDING through async question. Do not reboot or
+start another phone test until the observation arrives.
+
+Native root now permits bounded writes inside allocated linux only. The root
+filesystem and console tail may change; baseline RAM-preload/probe CRC tables
+are no longer valid for judging the on-phone filesystem after these writes.
+Do not rewrite the 12 GiB root or retry old full-baseline probes blindly.
+Persistent console and process sampler are enabled. If boot stalls, after the
+user returns to recovery read it with tools/collect_ufs_log.py into a fresh
+diagnostics directory. If UI boots, next requested task is touch: compiled
+S3910 driver is opt-in via --touch with --display-mode fit; no kernel rebuild
+is needed merely to enable it. No local QEMU or boot partition flashes.
+
 ## Hardware UFS READ CHECK PASS; native iOS UFS / 60 fps candidate ready — 2026-10-23
 
 User reports probe3 READ CHECK PASS followed by XIGUA init still-alive.
