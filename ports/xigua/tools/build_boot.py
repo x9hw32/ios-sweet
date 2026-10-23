@@ -28,6 +28,7 @@ def main():
     p.add_argument('--external-ramdisk-size', type=lambda x: int(x, 0))
     p.add_argument('--ios-userland', action='store_true', help='Enable the iOS display service and launchd boot arguments')
     p.add_argument('--touch', action='store_true', help='Enable experimental XIGUA Synaptics SPI touch input')
+    p.add_argument('--sample-processes', help='Comma-separated process names for persistent native-UFS stack samples')
     storage = p.add_mutually_exclusive_group()
     storage.add_argument('--ufs-probe', action='store_true', help='Read-only UFS CRC probe before a small RAM-root init')
     storage.add_argument('--ufs-root', action='store_true', help='Use the allocated linux UFS partition as the iOS root')
@@ -51,6 +52,11 @@ def main():
         p.error('UFS root requires iOS userland without a RAM disk')
     if a.touch and (not a.ios_userland or a.display_mode != 'fit'):
         p.error('--touch requires iOS userland and full-panel fit mode')
+    if a.sample_processes:
+        import re
+        if (not a.ufs_root or len(a.sample_processes) > 127 or
+                not re.fullmatch(r'[A-Za-z0-9_.-]+(?:,[A-Za-z0-9_.-]+)*', a.sample_processes)):
+            p.error('--sample-processes requires UFS root and a comma-separated list up to 127 characters')
     external = a.external_ramdisk_base is not None or a.external_ramdisk_size is not None
     if external and (not a.kernel or a.ramdisk or not a.external_ramdisk_base or not a.external_ramdisk_size):
         p.error('External RAM disk requires a kernel and both base/size, without --ramdisk')
@@ -95,6 +101,8 @@ def main():
                    f'ufsrw={int(a.ufs_root)} wdt=-1 wdt_test=no_user_checkin')
         if a.ufs_probe or a.ufs_root:
             command += f' xiguaufs={1 if a.ufs_probe else 2} ufsroot=linux ufscache=0 ufswait=1 ufslogsecs=5'
+        if a.sample_processes:
+            command += ' sweetsample=' + a.sample_processes
         if a.touch:
             if profile['kind'] != 'phone':
                 p.error('XIGUA touch requires the verified phone profile')

@@ -1,3 +1,47 @@
+## Touch probe2 SENT; current root backed up and LaunchServices stores persisted — 2026-10-23
+
+KernelCI40009954336 SUCCESS at commit2de11dd. ZIPCRC+SHA verified:
+fc1d392a86ed6bf35e4500b4edd74f36f2f167fa9e68ff4d47b92673173cde07.
+Kernel includes local GENI event-enable correction plus step/phase/IRQ/FIFO/
+clock failure diagnostics. Actual _tp_fault and _xigua_touch_start linked.
+Host40checks PASS and full touch C ARM64 compile PASS before this CI.
+
+In recovery READ ONLY captured the CURRENT12GiB root for inspection/backup:
+diagnostics/ios-ufs-60-1-root-snapshot/root.img; receipt SHA
+299d85c7429b8429163df5e4fd4eb13963aad66b5a72002f7ba471bcd9da0bf9.
+No root partition writes by this capture. Mounted baseline and snapshot read
+only on host for inspection; BOTH UNMOUNTED afterward. Filesystem on phone
+unchanged by inspection. Snapshot journal was not replayed.
+
+Confirmed persistent cache difference: baseline has0 LaunchServices candidate
+files; current root has26 including two csstore databases (4407296B,3637248B).
+Private evidence diagnostics/ios-ufs-60-1-native-analysis-2/
+{baseline-launchservices-files.json,live-launchservices-files.json,
+cache-persistence.json}. Therefore first native boot DID save LS databases;
+RAMroot previously discarded them. This makes second native boot timing a
+necessary next measurement; it has NOT been measured and is NOT promised fast.
+Actual first-boot stacks locate LS database reseeding as a startup gate, not
+GPU rasterization. Current VeryLowDisk state (~94MiB free) is also confirmed.
+Do not delete files or resize blindly. Preserve original and current snapshots.
+
+Saved prior ESP in diagnostics/ios-before-touch-probe-2, restored original,
+then installed out/efi-touch-probe-2/esp.img via recoveryBusyBoxdd. FullSHA
+readback VERIFIEDeea76460f9aeee0ab93ed1bd74ac8e0263c0a526a6f52a383ae691d83052b69b.
+TemporaryMu fastbootboot Sending/Booting OKAY; diagnostics/touch-probe-2-boot.txt
+and json. Tiny RAM PID1, CPU6, touchON, UFSOFF, no Apple userland or rootwrites.
+USER SCREEN RESULT PENDING via async question. Need new failure step/phase and
+CMD/IRQ/ACTIVE or coordinate reports after taps. Do not reboot while waiting.
+Touch NOT yet confirmed working. Buttons remain separate next hardware task.
+
+PreparedONLY full native iOS+touch candidate using this NEW kernel:
+out/phone-ios-ufs-touch-2 and out/efi-ios-ufs-touch-2/esp.img. NOT INSTALLED.
+CPU6/fit60 cap, nativeRWlinux, noRAMroot, touchON. Added host CLI optional
+--sample-processes; candidate samples SpringBoard,backboardd,lsd (existing
+kernel feature, no new kernel code). Boot it AFTER the raw-touch test succeeds;
+measure whether persisted LS caches remove the15min delay. Old baseline CRCs
+remain invalid for current filesystem. No local QEMU and no boot partition
+flashes. Public repo never includes Apple files, snapshots or device logs.
+
 ## Native iOS boot confirmed, delay traced to LaunchServices; touch probe1 timed out — 2026-10-23
 
 User reports native UFS iOS DID start after ~15 min, buttons/touch inactive.
