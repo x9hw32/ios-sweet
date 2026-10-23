@@ -1,3 +1,33 @@
+## Hardware UFS READ CHECK PASS; native iOS UFS / 60 fps candidate ready — 2026-10-23
+
+User reports probe3 READ CHECK PASS followed by XIGUA init still-alive.
+Saved diagnostics/ufs-probe-3-result.json. Kernel40003280437 / 4d53528 ACTIVE
+activation resolves the prior02/04/02 failure. Actual target data reads and
+three 4 MiB CRC samples match the prepared root. Handoff + SCSI + GPT + HFSX
+header and all three CRCs now verified on phone. Probe remained READ ONLY.
+
+User now requests60/120Hz. Current compiled framebuffer uses16667us vsync
+and a flush divisor: sweetfb_hz60 selects everytick (previous30 every2ticks).
+This is a PRESENTATION CAP, not measured FPS or confirmed physical DSI panel
+mode. No claim of120Hz: that needs panel/DSI mode verification and more work.
+Built out/phone-ios-ufs-60-1 and out/efi-ios-ufs-60-1/esp.img SHA
+fc23e21fc929bb7147109d53846a7658131f3346c5b52e5dbcfa858b3330b6b4.
+Same proven UFS kernel SHAa670969edfad80fa1dbd9fe1cdc87c40886573c750d75adfba5587f8a2412bfe.
+Payload args verified rd=ufsroot0 xiguaufs2 ufsrw1 cpus6 sweetfb_hz60 andfit1;
+no externalRAMroot andtouchOFF. Full13GiB managedRAM minus kernel (no12GiBcopy).
+Root is already present inlinux; do not rewrite it. Read-onlyCRC milestone is
+satisfied, so install this nativeRWroot candidate once recovery is available.
+Manualrecovery requested viaasync; currently noADB. Image NOT YET INSTALLED.
+
+After first nativeRWboot, rootfilesystem andconsole tail maychange inlinux.
+Old baseline verified-crcs.json and RAM-preload ESP CRC tables MUST NOT be
+used to judge the changed on-phone filesystem. Keep local original12GiB image
+as baseline; do not blindly reinstall or replace it. Native root mode correctly
+checks geometry+HFSX header but skips baselineCRCs. tools/collect_ufs_log.py can
+read the nativeconsole tail fromrecovery to diagnose boot delays. ExistingRAM
+fallback ESPs assume original rootCRCs and may need refreshed cache afterRW.
+Touch driver compiled, remainsOFF pending actual nativeUFSroot UI test.
+
 ## UFS probe3 with ACTIVE activation SENT to phone — 2026-10-23
 
 KernelCI40003280437 SUCCESS commit4d53528, ZIPCRC+SHA verified:
