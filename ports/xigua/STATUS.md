@@ -1,3 +1,131 @@
+## Native migration repaired; chronod filesystem-path candidate INSTALLED — 2026-10-24
+
+Latest phone test after data-ark repair stayed black. Agent found ADB in Android
+and rebooted recovery itself (no need to keep asking user). Fresh console saved:
+diagnostics/ios-black-20261024T103302-150331 (273846B,29flush,1sample).
+PROVEN migration repair success: mobileactivationd exec ONCE, NO crashes,
+its direct SB/lsd waits gone. Do not undo that repair. Physical key edges and
+HID delivery still verified. No kernel panic or new storage error (only normal
+initial TUR condition). BKNoWatchdogs/SetupDone/migration prefs all intact.
+
+Corrected preliminary attribution after exact symbolication: SB main now waits
+BSXPCServiceConnectionMessage -> CHSChronoServicesConnection descriptors ->
+CHSWidgetDescriptorProvider synchronous initial load, NOT LaunchServices.
+chronod crashes11times. Actual Swift assertion decoded from shared-cache .21:
+PCunslid180cec5a4 Swift_assertionFailure, caller1c70ea830; message "No path",
+ChronoCore/FilesystemAccess.swift line62. Initializer1c70e99cc asks NSFileManager
+URLForDirectory5 (Library), userDomain1, createYES; returnsnil, cached optional
+URL remainsnil then fatal. Library/chronod dir already exists, Library uid501
+mode711, passwd mobile HOME=/var/mobile valid. chronod job supplied only
+MallocStackLoggingDirectory, temporary directory missing. New source init.c
+run_command supplies HOME=/var/mobile. Actual HOME of chronod NOT measured.
+
+Prepared targeted ENVIRONMENT candidate (not a binary patch): chronod-only
+HOME=/var/mobile,CFFIXED_USER_HOME=/var/mobile,TMPDIR=/private/var/tmp/com.apple.chrono,
+OS_ACTIVITY_DT_MODE=YES,CFLOG_FORCE_STDERR=YES for next diagnostic. Created missing
+TMPDIR0700 uid/gid501. Other jobs byte-semantics identical. New patch_jobs pure
+helper checks unique label/UserName mobile/exactprogram; tests check no source
+mutation, other jobs unchanged, idempotence and unknown-job refusal.
+
+Fresh host-only COW out/hfs-ui-inspect-1 from current recovery root (source
+READ ONLY). Replayed16headers/166entries/2818048journalbytes on HOST ONLY.
+After creating TMPDIR, fsck-n detected exactly newdirectory/2catalogrecords and
+bitmap/header counters; repaired ON COW viafsck-fy, then full fsck-n PASS.
+Remounted RO: job equals pure patch_jobs(original), stock cache.21 SHA matches,
+journal empty. All host mounts/NBD disconnected before applying device writes.
+51hosttests PASS (drivers, payload/FS guards, COW/journal/run order, env semantics).
+
+Installed exact207sectors/847872B via BusyBoxdd to allocated linux; all ORIGINAL
+sectors checked BEFORE writes and ALL full readbacks verified afterward. Journal
+header last. Prepared originals/metadata+validated+installed receipts private at
+out/hfs-ui-inspect-1. Existing repair remains, no previous SB cache workaround.
+ESP stillverified physicalkeys1 SHA2ead6fae277408e9af14ee3fa0ca0b707f66ceb070970e7133ed8f88ce7f5efa.
+Temporary Mu fastbootboot Sending/Booting OKAY, diagnostics/chronod-home-1-boot.*.
+SAME kernel40038203873,CPU6,fit60,touch+physicalkeys,nativeUFS. USER RESULT PENDING
+via async. Do not claim HOME was cause or black screen fixed until phone result.
+If fail, auto adb reboot recovery if Android/PJA110 is reachable; collect latest
+console BEFORE next XNU boot. Look for chronod crash/No path and new OSlog errors
+or new SB main wait. Enabled logs may expose URLForDirectory NSError precisely.
+Never add blind UI bypasses; decode the blocker first. No QEMU/Android/GPT/boot
+flashes or full root rewrite. Prepared metadata rollback MUST refuse sectors
+modified by subsequent native boots; never force stale catalog metadata.
+
+Host resources all disconnected/unmounted now. New filesystem tools+tests will
+be mirrored/committed with this milestone. Private snapshots/COW/base/sectors,
+Apple binaries and account/container dumps must NOT enter git. IOS_TOUCH_READY.md
+updated to latest root candidate; ESP does not need rebuilding for these changes.
+
+## Native migration FILE repair succeeded; UI still black, now blocked by chronod — 2026-10-24
+
+USER black after prior SB workaround. Captured 4MiB wrapped console in
+ diagnostics/ios-black-20261024T095619-144720 (7288flush,36samples).
+Both prior SB patch sectors still matched. It removed SB's direct activation
+wait but did not cure crashing mobileactivationd; lsd worker copyActivationRecord
+still hung. All physical key/HID edges continue to work; no signature failures.
+
+Built READ-ONLY PHONE / host-copy-on-write NBD tool recovery_hfs_cow.py.
+Uses ONLY BusyBox dd if=linux remotely, own unused /dev/nbd3 with identity/PID
+guards; all virtual writes are saved on host. No VM/QEMU. Read metadata on
+demand (~181MiB) instead of taking another full12GiB snapshot. Strict committed
+HFS journal replay tool validates header, transaction, payload checksums and
+sequence/bounds BEFORE any host-COW writes. Layout/checksums follow local XNU
+hfs_journal.{h,c}. NBD ioctl numbers verified against /usr/include/linux/nbd.h
+(initial2 attempts disconnected harmlessly; actual correct sessions3/4 used).
+
+out/hfs-ark-repair-4: replay17headers/300entries/3870720journalbytes on host.
+Volume fsck OK; current data_ark.plist0B (uid501/gid4294967294/mode666).
+Recovered exact459B valid file from first SUCCESSFUL native root snapshot;
+20H392/16.7.16 and completed FactoryDCRT/UIKLegacy/MFI/PreSydro migration flags.
+Preserved file owner/mode. Removed prior SB binary workaround IN COW, verified
+stock cache.21 SHA2f30d9a7e954f4f9aac6feee71da395e09b34544183a040ae38161e9e007222f.
+Post-repair fsck OK, journal empty, data ark reparsed on a fresh RO mount.
+49hosttests PASS (COW partial writes/revert, checked journal replay+wrap/refusal,
+sector grouping/header-last, previous drivers). New apply_hfs_cow.py checks all
+old sectors before writes and full readbacks, rollback before-bytes on I/Oerror.
+
+Applied exactly7sectors/28672B to allocated linux via recoveryBusyBoxdd,
+physical0,50,98,1627214,2504308,2521053,3045462; journal header98 written LAST.
+Receipt+originals at out/hfs-ark-repair-4/{receipt,validated,installed}.json,
+sectors/*.bin (ALL PRIVATE; no raw sectors in git). Only file/allocation/catalog/
+volume/journal metadata plus undo of2oldSBcode sectors. Other files untouched.
+No full root rewrite, Android/GPT/boot writes. Old SB workaround locally marked
+superseded; do not reapply it. Metadata rollback refuses changed sectors after
+later native boots to protect new writes; do not force stale metadata restores.
+TemporaryMu boot OKAY, diagnostics/hfs-ark-repair-1-boot.*; SAME kernel40038203873,
+CPU6/fit60/touch+physicalkeys. USER still black. Agent found ADB in Android,
+rebooted recovery itself and captured fresh log:
+ diagnostics/ios-black-20261024T103302-150331 (273846B,29flush,1sample).
+ACTUAL SUCCESS: mobileactivationd exec once, NO crashes, prior activation waits
+gone, root mounted. Do NOT undo the migration repair as if it failed.
+
+Resolved87 frame addresses in latest log, resolved-stacks.txt. SB main now waits
+BSXPCServiceConnectionMessage sendSynchronously -> CHSChronoServicesConnection
+ descriptors -> CHSWidgetDescriptorProvider initial synchronous loading.
+chronod crashes11times with Swift _assertionFailure. Correcting earlier guess:
+this CURRENT sample is ChronoServices/chronod, NOT LaunchServices. lsd main idle,
+all4workerthreads idle; only one exec/header, no hidden duplicate lsd observed.
+BKNoWatchdogs=True, setup flags/migration version valid; do not change them.
+
+ACTIVE HOST RESOURCES RIGHT NOW (clean up before stop): /dev/nbd3 host COW
+out/hfs-ui-inspect-1, server exec session10882, mounted READ ONLY at
+build/cow-ios-root. Replayed16headers/166entries/2818048B on HOST ONLY; no writes
+to phone since repair above. Current phone in recovery, no new test boot yet.
+Need diagnose chronod Swift fatal, not add blind UI patches. Copied65KiB actual
+chronod to build/boot-delay-reference/chronod. PCunslid180cec5a4=Swift assertion;
+bt1c70ea830,1c70ea0d0 ->dispatch_once ->1c717f6a4/1c717f9e4 ->
+UIApplicationMainPreparations ->UIApplicationMain ->ChronodStartupHelper bootstrap.
+ipsw dyld a2o of1c70ea780 over current mounted DSC running/session56345 or
+finished into build/chronod-code-location.txt. Need decode code/literals at
+crashing Swift caller to get assertion message. No phone mutation planned yet.
+
+A2S index fast format confirmed: magicA2S\x02, uint32 count at4, uint32 poolsize8,
+12-byte records from12: uint64address,uint32nameoffset. Stringpool at12+12*count.
+Filelen765383276 =12+12*10898361+634602932. mmap+binarysearch resolves nearest
+symbol in milliseconds without loading730MiB into a Go map. Nearest names can
+be far-away stripped labels (_block_destroy_helper+5KiB); don't treat them as
+exact functions. Useful for assertion/caller, exact a2f still good for image.
+Baseline host HFS mount currently UNMOUNTED. Current COW root is mounted RO.
+
 ## Buttons read on hardware; SpringBoard activation wait identified and patched — 2026-10-24
 
 USER: no screen reaction to physical buttons, supplied github.com/oosexgang.

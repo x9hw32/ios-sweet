@@ -1,3 +1,8 @@
+> Superseded by the verified native migration-file repair. The old
+> SpringBoard binary workaround is removed from the phone and should not be
+> reinstalled. Its installer refuses a locally marked superseded plan.
+> See HFS_RECOVERY.md and STATUS.md for the current approach and phone results.
+
 # Local SpringBoard state for the PJA110 research port
 
 The captured SpringBoard main thread waits in MobileActivation while the

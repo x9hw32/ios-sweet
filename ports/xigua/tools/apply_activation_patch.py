@@ -39,6 +39,8 @@ def main():
     parser.add_argument('--prepared', type=Path, required=True)
     parser.add_argument('--restore', action='store_true')
     args = parser.parse_args()
+    if (args.prepared / 'superseded.json').exists() and not args.restore:
+        raise SystemExit('This workaround was superseded by migration-file repair; no writes made')
     r = json.loads((args.prepared / 'receipt.json').read_text())
     if (r.get('kind') != 'xigua-ios-20H392-local-lockdown-state' or
             r.get('target') != TARGET or r.get('sector_bytes') != SECTOR or
