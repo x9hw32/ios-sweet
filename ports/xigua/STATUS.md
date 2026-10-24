@@ -1,3 +1,16 @@
+## Chronod HOME phone test FAILED to restore UI — 2026-10-24
+
+User confirms the chronod-home candidate still gives a black lit screen;
+pressing Power does not produce visible UI. This does NOT establish whether
+chronod still crashes: a fresh native console is required. ADB currently has
+NO connected device. Asked user to enter recovery and leave USB connected;
+no mounts/transcription needed. No further device writes or speculative patches
+performed. Existing proven data-ark migration repair remains. Current ESP/kernel
+unchanged (keys-1, CI40038203873), environment candidate out/hfs-ui-inspect-1
+still installed. Next: collect tools/capture_ios_black_screen.sh immediately
+when PJA110 recovery is reachable, compare chronod crash and SB main frames.
+All host HFS/NBD mounts absent. Prior tools/docs committed and pushed as41e808e.
+
 ## Native migration repaired; chronod filesystem-path candidate INSTALLED — 2026-10-24
 
 Latest phone test after data-ark repair stayed black. Agent found ADB in Android
