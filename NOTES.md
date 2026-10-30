@@ -1,5 +1,8 @@
 ## Runner pool switched at user request — 2026-10-31
 
+Replacement41134663266 CONFIRMED in_progress: runner setup+checkout PASS;
+Install host build dependencies running. Queue bypass succeeded; compilation pending.
+
 Old run41133721770 remained queued without runner assignment for~7minutes.
 Verified current official GitHub runner labels: macos15 now ARM64 default;
 macos15-intel is a distinct Intel pool, Xcode16.4 installed. Changed workflow
