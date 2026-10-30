@@ -43,7 +43,10 @@ def main():
     purpose = checked.get('purpose', 'migration-file')
     known_repair = ((purpose == 'migration-file' and checked.get('ark_bytes') == 459) or
                     (purpose == 'chronod-home' and checked.get('chronod_home') == '/var/mobile' and
-                     checked.get('job_only_environment_change') is True))
+                     checked.get('job_only_environment_change') is True) or
+                    (purpose == 'ui-daemon-logging' and
+                     checked.get('job_only_logging_change') is True and
+                     checked.get('labels') == ['com.apple.chronod', 'com.apple.mobileactivationd']))
     if (r.get('target') != TARGET or r.get('phone_writes') is not False or
             r.get('source_bytes') != ROOT_BYTES or r.get('sector_bytes') != SECTOR or
             not 1 <= len(r.get('sectors', [])) <= 8192 or

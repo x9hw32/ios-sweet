@@ -22,7 +22,8 @@ ONLY the host overlay. Never mount the phone root read-write in recovery.
 After any virtual edits: unmount, run full fsck, recheck the target files and
 journal, and save a task-specific validated.json. A new directory can require
 counter/bitmap correction; validation must finish before device installation.
-The supported tasks are migration-file repair and chronod's home environment.
+The supported tasks are migration-file repair, chronod's home environment, and
+strictly scoped UI-daemon console logging.
 
 Disconnect to export original/changed4KiB sectors and checksums:
 

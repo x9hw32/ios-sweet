@@ -1,3 +1,47 @@
+## Fresh black-screen capture and targeted daemon logging INSTALLED — 2026-10-31
+
+User asked to continue and check HackiOS updates. ADB initially unauthorized,
+then authorized; found rooted PJA110 Android, rebooted recovery automatically.
+Saved diagnostics/ios-black-20261030T212355-11066 (UTC host date),348909B,
+53flush,2samples. Actual recurrence: mobileactivationd SIGTRAP26, chronod23.
+SB main again MadGate getActivationState -> SBLockdownManager _setupActivationState;
+chronod same No path assertion/caller1c70ea830. Both input drivers remain active.
+No panic/ENOSPC/new storage failure. Source root first12GiB still HFSX,52MiBfree.
+
+Fresh READ-ONLY phone / HOST-COW out/hfs-black-20261031-1 replayed17headers,
+222entries,3342336journalbytes; full fsck-n OK. Important observations: chronod
+HOME/CFFIXED_USER_HOME and diagnostics env PERSISTED; its temporary directory
+was removed during boot; container data_ark.plist is AGAIN0B. Prior migration
+repair had genuinely stopped crashes for one boot, but was not durable across
+subsequent boots. Do not simply repeat that repair or blame reverted job env.
+Stock cache.21 verifiedSHA2f30d9a7e954f4f9aac6feee71da395e09b34544183a040ae38161e9e007222f.
+
+Checked current HackiOS org/repositories via GitHub, pinned current main:
+oosexgang/hakios-xnu-kernel a3384e031eb1e605cf37adaefc19991f04f6274b (Oct30).
+Old userland repo now ONLY a moved pointer; userland sources merged in main.
+Sources cached privately under .cache/input-source/oosexgang/20261031.
+Read latest changelog/userland/notes/minimac, not executed their scripts.
+Useful diagnostic difference: mkjobs.py routes StandardErrorPath=/dev/console;
+our two crashing jobs lacked stdout/stderr routing, so HOME's oslog env alone
+could not expose their errors. Latest Metal is separate, targets their Adreno;
+not a ready SM8550 driver. No hardware code copied, no QEMU.
+
+New pure patch_ui_daemon_logging.py STRICTLY checks unique labels/mobile/exact
+programs for chronod+mobileactivationd, adds stdout+stderr=/dev/console and
+OS_ACTIVITY_DT_MODE/CFLOG_FORCE_STDERR. Preserves all other semantics/env/HOME.
+Tests source immutability, idempotence, unknown/duplicate/identity refusal;
+53hosttests PASS. apply_hfs_cow now supports this explicitly validated purpose.
+HOSTCOW fsck-fy marked dirty volume clean for Linux RW mount, then changed ONLY
+two jobs' logging in launchd.plist. Full fsck-n PASS, RO reparse exactdiff,
+empty journal+stockcacheSHA verified. Disconnected ALL host HFS/NBD beforewrites.
+Installed124sectors/507904B with all preflight+readback checks. PRIVATE sector
+originals/receipts/launchd copies in out/hfs-black-20261031-1, never commit them.
+TemporaryMu fastbootboot Sending/Booting OKAY; same kernelCI40038203873,
+CPU6,fit60,touch+keys,currentESP verifiedSHA2ead6fae277408e9af14ee3fa0ca0b707f66ceb070970e7133ed8f88ce7f5efa.
+Bootreceipt diagnostics/ui-daemon-logging-20261031-boot.*. Asked user wait2–3min
+then return recovery; next collect fresh log and READ exact NSError/assertion
+before choosing actual fix. This is a DIAGNOSTIC boot, not claimed UI repair.
+
 ## Chronod HOME phone test FAILED to restore UI — 2026-10-24
 
 User confirms the chronod-home candidate still gives a black lit screen;
