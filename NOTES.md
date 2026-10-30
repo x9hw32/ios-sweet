@@ -1,3 +1,49 @@
+## ACTIVE BASE SWITCH: UniXNU-sheng / exact SM8550, eight CPUs — 2026-10-31
+
+User first requested HackiOS instead of sweet, then explicitly chose the Xiaomi
+Pad reference because it has SM8550: latest instruction is USE UniXNU-sheng,
+not HackiOS or ios-sweet. User asks eight cores: enabled all8 in new xigua DTS.
+User recalls black screen began after the 15-minute boot improvement; retain as
+a lead, not established cause. Existing evidence firstblack Oct23T204020 before
+physicalkeys, chronod86; mobileactivation crashes first seen Oct23T230300.
+
+New latest log diagnostics/ios-black-20261030T213349-16093:295169B,53flush,
+2samples. Logging-to-/dev/console diagnostic did NOT show exec for either
+chronod or mobileactivationd, so zero crashes here is NOT success. SB still
+awaits activation. Diagnostic root change out/hfs-black-20261031-1 remains
+installed. Fresh COW out/hfs-daemon-files-1 was started then DISCONNECTED with
+no replay/mount/edits after user changed scope. All host resources closed.
+Phone remains recovery; no further device writes/boots during base switch.
+
+Source-only checkouts:
+ upstream/unixnu main da14170ba5478a2bd68546136d59630c4a70189e
+ upstream/unixnu-sheng main08cde20edc3254ed6f7df8d0f5384fb887786e8f
+ .cache/input-source/unixnu-sm8550 pin23b2049fcd9e30356161def84231334fb55ecca9
+Earlier upstream/hakios initialxigua scaffold is ABANDONED at usersteering;
+it passed scaffoldcheck but is not selected. No HackiOS image was built/booted.
+
+New independent local Gitdevice repo upstream/unixnu-xigua contains pinned
+feeds, board.toml, xigua_defconfig, xigua.dts, README and plannedportingrecord.
+Based on minimal UniXNU template with sheng's exact SoC/OS selection. Minimal
+CPU/platform/AES/prelink/loader components ONLY; do not copy tablet Novatek,
+UFS userdataLBAs, power votes or firmware blindly. Drivers still need adaptation.
+RAM high0x8c0000000+0x340000000; GOP reservedb8000000+2b00000. Eight CPUs enabled,
+all proper MPIDRs inherited from SM8550 DTSI. dtc compiled2938B withZEROwarnings;
+defconfig and resolvedstatus succeed; structuredrecordcheck13areas PASS.
+Example=true intentionally guards unfinished firmware/imageinputs. This is NOT
+bootable yet, no claimed PJA110 success with UniXNU. Existing Mu and Android,
+ESP/allocatedroot retained; no QEMU. New profile iPadOS17.7.11/21H461,
+XNU10063.141.1; old iOS16/20H392 root and ABI inputs CANNOT be reused as itsOS.
+
+Fetching upstream sources via unixnu fetch, logbuild/unixnu-xigua/fetch.log,
+execsession90437 (may still run). Five minimal components already initialized
+at maincatalog pins; fetchupdates all upstreamsubmodules before referencefeeds.
+Next buildmilestone: resolved source tree and native CPU diagnostic loader on
+existing Mu-xigua, before any new UFS/root install. Host Linux patched XNU
+compiler is NOT installed; do not run setup blindly (it writes /usr/bin shims).
+Use reviewed CI or isolated toolchain. No newkernelcompiled yet. Oldworking
+input sources underkernel/ and oldport receipts preserved for adaptation.
+
 ## Fresh black-screen capture and targeted daemon logging INSTALLED — 2026-10-31
 
 User asked to continue and check HackiOS updates. ADB initially unauthorized,
