@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/dts-v1/;
+/include/ "sm8550.dtsi"
+/ {
+    model = "OnePlus Ace 2 Pro (PJA110)";
+    compatible = "oneplus,xigua", "qcom,sm8550";
+    // Contiguous high RAM exercised by the previous native XNU port.
+    // Low firmware/DMA regions are deliberately outside this initial managed bank.
+    memory@8c0000000 {
+        device_type = "memory";
+        reg = <0x8 0xc0000000 0x3 0x40000000>;
+    };
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+        framebuffer@b8000000 {
+            label = "cont_splash_region";
+            reg = <0 0xb8000000 0 0x2b00000>;
+            no-map;
+        };
+    };
+};
+&cpu0 { unixnu,cluster-type = "E"; };
+&cpu1 { unixnu,cluster-type = "E"; };
+&cpu2 { unixnu,cluster-type = "E"; };
+&cpu3 { unixnu,cluster-type = "P"; };
+&cpu4 { unixnu,cluster-type = "P"; };
+&cpu5 { unixnu,cluster-type = "P"; };
+&cpu6 { unixnu,cluster-type = "P"; status = "okay"; };
+&cpu7 { unixnu,cluster-type = "P"; status = "okay"; };
+// Board peripherals stay disabled until their PJA110 wiring and interfaces are adapted.

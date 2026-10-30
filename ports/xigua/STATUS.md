@@ -1,3 +1,16 @@
+## UniXNU native-kernel Actions workflow READY — 2026-10-31
+
+User correctly noted Actions had not been started. Added dedicated workflow
+.github/workflows/unixnu-xigua.yml, macos15/Xcode16.4, pinned UniXNU revision,
+tracked source-only device config under ports/xigua/unixnu-device. Builds XNU
+and platform/AES/source archives through the pinned build API. This target
+intentionally COMPILES ONLY; it does not prelink or build/install any unfinished
+firmware/payload. example=true guard on image-producing CLI stays in place.
+All8 CPU DTS entries enabled; no tablet peripheral or partition assumptions.
+Logs and native Mach-O artifact always uploaded. No phone operations/QEMU.
+Source fetch on host COMPLETED and unixnu.lock now copied with device sources.
+Device-record validation13areas PASS. Workflow dispatch/run ID recorded next.
+
 ## ACTIVE BASE SWITCH: UniXNU-sheng / exact SM8550, eight CPUs — 2026-10-31
 
 User first requested HackiOS instead of sweet, then explicitly chose the Xiaomi

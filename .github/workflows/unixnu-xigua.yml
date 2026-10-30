@@ -1,0 +1,65 @@
+name: UniXNU PJA110 kernel
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kernel:
+    runs-on: macos-15
+    timeout-minutes: 120
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      UNIXNU_REVISION: da14170ba5478a2bd68546136d59630c4a70189e
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host build dependencies
+        run: |
+          brew install cmake ninja unifdef llvm lzfse dtc
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+      - name: Fetch pinned UniXNU base
+        run: |
+          git init -q unixnu
+          git -C unixnu fetch --depth 1 https://github.com/UniXNU/UniXNU.git "$UNIXNU_REVISION"
+          git -C unixnu checkout -q FETCH_HEAD
+          test "$(git -C unixnu rev-parse HEAD)" = "$UNIXNU_REVISION"
+          cp -R ports/xigua/unixnu-device device
+      - name: Check device record and resolve configuration
+        run: |
+          python3 unixnu/scripts/porting-record.py check --device device
+          ./unixnu/unixnu defconfig xigua_defconfig -D device
+          ./unixnu/unixnu tree -D device
+          ./unixnu/unixnu status --json -D device > resolved-status.json
+          dtc -I dts -O dtb -i unixnu/out/feeds/UniXNU-sm8550-common-82c53fdb/dts -o xigua.dtb device/dts/xigua.dts
+      - name: Compile native XNU and selected platform archives
+        # Compile only: the unfinished firmware/payload configuration stays guarded.
+        # No prelink, IPSW root installation or phone operation runs in this job.
+        run: |
+          python3 - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path('unixnu/scripts').resolve()))
+          from unixnu.cli import parser, Context, prepare
+          from unixnu import kernel
+          args = parser().parse_args(['build', 'kernel', '-D', str(Path('device').resolve()), '-j', '3'])
+          ctx = Context(args)
+          ctx.need_config()
+          modules = prepare(ctx, ['kernel'])
+          kernel.build(ctx, modules)
+          PY
+      - name: Save compiler logs and native kernel
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unixnu-xigua-native-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: warn
+          include-hidden-files: true
+          path: |
+            resolved-status.json
+            xigua.dtb
+            unixnu/out/xigua/**/logs/**
+            unixnu/out/xigua/**/tree/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped.noctf
