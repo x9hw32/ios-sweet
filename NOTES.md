@@ -1,3 +1,13 @@
+## Runner pool switched at user request — 2026-10-31
+
+Old run41133721770 remained queued without runner assignment for~7minutes.
+Verified current official GitHub runner labels: macos15 now ARM64 default;
+macos15-intel is a distinct Intel pool, Xcode16.4 installed. Changed workflow
+runs-on to macos-15-intel (d81df83), YAMLverified. Dispatched replacement
+https://github.com/x9hw32/ios-sweet/actions/runs/41134663266; queuedinitially.
+Cancellation request for old41133721770 accepted. Do not claim compiler started
+until jobsteps/runner confirms it. No devicewrite or hardwaretest during switch.
+
 ## UniXNU Actions DISPATCHED:41133721770 — 2026-10-31
 
 Actual workflow run https://github.com/x9hw32/ios-sweet/actions/runs/41133721770
